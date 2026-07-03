@@ -9,7 +9,10 @@ export default function ExpenseCard({ expense, onDelete }) {
 
   const payer = participants.find((p) => p.id === expense.paid_by)
   const splitNames = expense.splits
-    .map((s) => participants.find((p) => p.id === s.participant_id)?.name)
+    .map((s) => {
+      const p = participants.find((p) => p.id === s.participant_id)
+      return p ? `${p.emoji || ''} ${p.name}`.trim() : null
+    })
     .filter(Boolean)
 
   const splitLabel =
@@ -24,7 +27,7 @@ export default function ExpenseCard({ expense, onDelete }) {
           {expense.description}
         </div>
         <div style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
-          Paid by {payer?.name || 'Unknown'}
+          Paid by {payer?.emoji || ''} {payer?.name || 'Unknown'}
         </div>
         <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 2 }}>
           Split: {splitLabel}

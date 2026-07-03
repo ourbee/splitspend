@@ -10,11 +10,11 @@ export default function HomePage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
-  const handleCreate = async (name, currency, participants) => {
+  const handleCreate = async (name, currency, participants, creatorIndex) => {
     setLoading(true)
     setError(null)
     try {
-      const tripId = await createTrip(name, currency, participants)
+      const tripId = await createTrip(name, currency, participants, creatorIndex)
       navigate(`/trip/${tripId}`)
     } catch (err) {
       setError(err.message)

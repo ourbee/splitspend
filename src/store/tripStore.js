@@ -5,6 +5,7 @@ const useTripStore = create((set, get) => ({
   trip: null,
   participants: [],
   expenses: [],
+  settlementRecords: [],
   myIdentity: null,
   loading: true,
   error: null,
@@ -40,6 +41,14 @@ const useTripStore = create((set, get) => ({
 
       if (expError) throw expError
 
+      const { data: settlementRecords, error: settleError } = await supabase
+        .from('settlement_records')
+        .select('*')
+        .eq('trip_id', tripId)
+        .order('settled_at', { ascending: false })
+
+      if (settleError) throw settleError
+
       // Load identity from localStorage
       const savedIdentity = localStorage.getItem(`splitspend_identity_${tripId}`)
 
@@ -47,6 +56,7 @@ const useTripStore = create((set, get) => ({
         trip,
         participants,
         expenses,
+        settlementRecords: settlementRecords || [],
         myIdentity: savedIdentity,
         loading: false,
       })
@@ -55,7 +65,7 @@ const useTripStore = create((set, get) => ({
     }
   },
 
-  createTrip: async (name, currency, participantNames) => {
+  createTrip: async (name, currency, participantData, creatorIndex) => {
     if (!supabase) throw new Error('Supabase not configured. Add your credentials to .env')
 
     const { data: trip, error: tripError } = await supabase
@@ -66,9 +76,10 @@ const useTripStore = create((set, get) => ({
 
     if (tripError) throw tripError
 
-    const participantRows = participantNames.map((pName) => ({
+    const participantRows = participantData.map((p) => ({
       trip_id: trip.id,
-      name: pName,
+      name: p.name,
+      emoji: p.emoji || '',
     }))
 
     const { data: participants, error: partError } = await supabase
@@ -78,11 +89,34 @@ const useTripStore = create((set, get) => ({
 
     if (partError) throw partError
 
-    // Auto-set creator as the first participant
-    const creatorId = participants[0].id
-    localStorage.setItem(`splitspend_identity_${trip.id}`, creatorId)
+    // Set the creator
+    const creatorId = participants[creatorIndex]?.id || participants[0].id
 
-    set({ trip, participants, expenses: [], myIdentity: creatorId, loading: false })
+    // Mark creator as claimed
+    await supabase
+      .from('participants')
+      .update({ claimed_by: creatorId })
+      .eq('id', creatorId)
+
+    // Update trip with creator_id
+    await supabase
+      .from('trips')
+      .update({ creator_id: creatorId })
+      .eq('id', trip.id)
+
+    localStorage.setItem(`splitspend_identity_${trip.id}`, creatorId)
+    localStorage.setItem(`splitspend_creator_${trip.id}`, 'true')
+
+    set({
+      trip: { ...trip, creator_id: creatorId },
+      participants: participants.map(p =>
+        p.id === creatorId ? { ...p, claimed_by: creatorId } : p
+      ),
+      expenses: [],
+      settlementRecords: [],
+      myIdentity: creatorId,
+      loading: false,
+    })
     return trip.id
   },
 
@@ -106,8 +140,6 @@ const useTripStore = create((set, get) => ({
     })
 
     if (error) throw error
-
-    // Refetch expenses to get full data with splits
     await get().fetchTrip(tripId)
   },
 
@@ -123,9 +155,85 @@ const useTripStore = create((set, get) => ({
     await get().fetchTrip(tripId)
   },
 
+  recordSettlement: async (tripId, fromId, toId, amount) => {
+    if (!supabase) throw new Error('Supabase not configured')
+
+    const { error } = await supabase
+      .from('settlement_records')
+      .insert({
+        trip_id: tripId,
+        from_participant: fromId,
+        to_participant: toId,
+        amount,
+      })
+
+    if (error) throw error
+    await get().fetchTrip(tripId)
+  },
+
+  undoSettlement: async (settlementId, tripId) => {
+    if (!supabase) throw new Error('Supabase not configured')
+
+    const { error } = await supabase
+      .from('settlement_records')
+      .delete()
+      .eq('id', settlementId)
+
+    if (error) throw error
+    await get().fetchTrip(tripId)
+  },
+
+  addParticipant: async (tripId, name, emoji) => {
+    if (!supabase) throw new Error('Supabase not configured')
+
+    const { data, error } = await supabase
+      .from('participants')
+      .insert({ trip_id: tripId, name, emoji: emoji || '' })
+      .select()
+      .single()
+
+    if (error) throw error
+    await get().fetchTrip(tripId)
+    return data
+  },
+
+  claimIdentity: async (tripId, participantId) => {
+    if (!supabase) throw new Error('Supabase not configured')
+
+    await supabase
+      .from('participants')
+      .update({ claimed_by: participantId })
+      .eq('id', participantId)
+
+    localStorage.setItem(`splitspend_identity_${tripId}`, participantId)
+    set({ myIdentity: participantId })
+  },
+
+  updateParticipantEmoji: async (participantId, emoji) => {
+    if (!supabase) throw new Error('Supabase not configured')
+
+    const { error } = await supabase
+      .from('participants')
+      .update({ emoji })
+      .eq('id', participantId)
+
+    if (error) throw error
+
+    set((state) => ({
+      participants: state.participants.map(p =>
+        p.id === participantId ? { ...p, emoji } : p
+      ),
+    }))
+  },
+
   setIdentity: (tripId, participantId) => {
     localStorage.setItem(`splitspend_identity_${tripId}`, participantId)
     set({ myIdentity: participantId })
+  },
+
+  isCreator: () => {
+    const { trip, myIdentity } = get()
+    return trip?.creator_id === myIdentity
   },
 
   reset: () => {
@@ -133,6 +241,7 @@ const useTripStore = create((set, get) => ({
       trip: null,
       participants: [],
       expenses: [],
+      settlementRecords: [],
       myIdentity: null,
       loading: true,
       error: null,

@@ -7,7 +7,10 @@ import ExpenseList from '../components/ExpenseList'
 import BalanceSummary from '../components/BalanceSummary'
 import SettlementList from '../components/SettlementList'
 import AddExpenseModal from '../components/AddExpenseModal'
+import AddParticipantModal from '../components/AddParticipantModal'
 import QRCodeDisplay from '../components/QRCodeDisplay'
+import ExportModal from '../components/ExportModal'
+import AboutModal from '../components/AboutModal'
 
 export default function TripPage() {
   const { tripId } = useParams()
@@ -16,10 +19,15 @@ export default function TripPage() {
   const myIdentity = useTripStore((s) => s.myIdentity)
   const loading = useTripStore((s) => s.loading)
   const error = useTripStore((s) => s.error)
+  const isCreator = useTripStore((s) => s.isCreator)
 
   const [activeTab, setActiveTab] = useState('expenses')
   const [showAddExpense, setShowAddExpense] = useState(false)
   const [showQR, setShowQR] = useState(false)
+  const [showAddParticipant, setShowAddParticipant] = useState(false)
+  const [showExport, setShowExport] = useState(false)
+  const [showAbout, setShowAbout] = useState(false)
+  const [showMenu, setShowMenu] = useState(false)
 
   useTrip(tripId)
   useRealtime(tripId)
@@ -40,6 +48,14 @@ export default function TripPage() {
     }
   }, [loading, trip, myIdentity, tripId])
 
+  // Close menu when clicking outside
+  useEffect(() => {
+    if (!showMenu) return
+    const handler = () => setShowMenu(false)
+    document.addEventListener('click', handler)
+    return () => document.removeEventListener('click', handler)
+  }, [showMenu])
+
   if (loading) {
     return (
       <div className="container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -59,6 +75,8 @@ export default function TripPage() {
     )
   }
 
+  const creator = isCreator()
+
   return (
     <div className="container" style={{ paddingTop: 16, paddingBottom: 100 }}>
       {/* Header */}
@@ -72,13 +90,69 @@ export default function TripPage() {
         <div>
           <h1 style={{ fontSize: 20, fontWeight: 700 }}>{trip.name}</h1>
         </div>
-        <button
-          className="btn btn-secondary"
-          style={{ width: 'auto', padding: '8px 14px', fontSize: 14 }}
-          onClick={() => setShowQR(true)}
-        >
-          QR Code
-        </button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button
+            className="btn btn-secondary"
+            style={{ width: 'auto', padding: '8px 14px', fontSize: 14 }}
+            onClick={() => setShowQR(true)}
+          >
+            Share
+          </button>
+          <div style={{ position: 'relative' }}>
+            <button
+              className="btn-ghost"
+              style={{ fontSize: 22, padding: '4px 8px', lineHeight: 1 }}
+              onClick={(e) => {
+                e.stopPropagation()
+                setShowMenu(!showMenu)
+              }}
+              title="More options"
+            >
+              &#8942;
+            </button>
+            {showMenu && (
+              <div style={{
+                position: 'absolute',
+                top: '100%',
+                right: 0,
+                background: 'var(--color-surface)',
+                border: '1px solid var(--color-border)',
+                borderRadius: 'var(--radius-md)',
+                boxShadow: 'var(--shadow-modal)',
+                zIndex: 60,
+                minWidth: 180,
+                overflow: 'hidden',
+              }}>
+                <button
+                  className="menu-item"
+                  onClick={() => { window.open(window.location.origin, '_blank'); setShowMenu(false) }}
+                >
+                  New Splitspend
+                </button>
+                {creator && (
+                  <button
+                    className="menu-item"
+                    onClick={() => { setShowAddParticipant(true); setShowMenu(false) }}
+                  >
+                    Add Participant
+                  </button>
+                )}
+                <button
+                  className="menu-item"
+                  onClick={() => { setShowExport(true); setShowMenu(false) }}
+                >
+                  Export Data
+                </button>
+                <button
+                  className="menu-item"
+                  onClick={() => { setShowAbout(true); setShowMenu(false) }}
+                >
+                  About Splitspend
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -119,6 +193,15 @@ export default function TripPage() {
       )}
       {showQR && (
         <QRCodeDisplay tripId={tripId} onClose={() => setShowQR(false)} />
+      )}
+      {showAddParticipant && (
+        <AddParticipantModal onClose={() => setShowAddParticipant(false)} />
+      )}
+      {showExport && (
+        <ExportModal onClose={() => setShowExport(false)} />
+      )}
+      {showAbout && (
+        <AboutModal onClose={() => setShowAbout(false)} />
       )}
     </div>
   )

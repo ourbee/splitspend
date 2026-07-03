@@ -1,6 +1,8 @@
+import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import useTripStore from '../store/tripStore'
 import useTrip from '../hooks/useTrip'
+import { EMOJI_OPTIONS } from '../lib/emojis'
 
 export default function JoinPage() {
   const { tripId } = useParams()
@@ -9,13 +11,41 @@ export default function JoinPage() {
   const participants = useTripStore((s) => s.participants)
   const loading = useTripStore((s) => s.loading)
   const error = useTripStore((s) => s.error)
-  const setIdentity = useTripStore((s) => s.setIdentity)
+  const claimIdentity = useTripStore((s) => s.claimIdentity)
+  const updateParticipantEmoji = useTripStore((s) => s.updateParticipantEmoji)
+
+  const [selectedId, setSelectedId] = useState(null)
+  const [selectedEmoji, setSelectedEmoji] = useState(null)
+  const [joining, setJoining] = useState(false)
 
   useTrip(tripId)
 
-  const handleSelect = (participantId) => {
-    setIdentity(tripId, participantId)
-    navigate(`/trip/${tripId}`)
+  // Filter out already-claimed participants
+  const unclaimedParticipants = participants.filter((p) => !p.claimed_by)
+
+  const handleTap = (participant) => {
+    if (selectedId === participant.id) {
+      setSelectedId(null)
+      setSelectedEmoji(null)
+    } else {
+      setSelectedId(participant.id)
+      setSelectedEmoji(participant.emoji || EMOJI_OPTIONS[0])
+    }
+  }
+
+  const handleConfirm = async () => {
+    if (!selectedId) return
+    setJoining(true)
+    try {
+      const participant = participants.find(p => p.id === selectedId)
+      if (selectedEmoji && selectedEmoji !== participant?.emoji) {
+        await updateParticipantEmoji(selectedId, selectedEmoji)
+      }
+      await claimIdentity(tripId, selectedId)
+      navigate(`/trip/${tripId}`)
+    } catch {
+      setJoining(false)
+    }
   }
 
   if (loading) {
@@ -52,33 +82,113 @@ export default function JoinPage() {
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {participants.map((p) => (
-          <button
-            key={p.id}
-            className="card"
-            onClick={() => handleSelect(p.id)}
-            style={{
-              border: '2px solid var(--color-border)',
-              cursor: 'pointer',
-              textAlign: 'center',
-              fontSize: 18,
-              fontWeight: 600,
-              padding: '20px',
-              transition: 'border-color 0.15s, background 0.15s',
-            }}
-            onMouseEnter={(e) => {
-              e.target.style.borderColor = 'var(--color-primary)'
-              e.target.style.background = 'var(--color-primary-light)'
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.borderColor = 'var(--color-border)'
-              e.target.style.background = 'var(--color-surface)'
-            }}
-          >
-            {p.name}
-          </button>
-        ))}
+        {unclaimedParticipants.length === 0 ? (
+          <div className="empty-state">
+            <p style={{ fontSize: 18, marginBottom: 8 }}>All identities have been claimed</p>
+            <p>Everyone in this trip has already joined.</p>
+          </div>
+        ) : (
+          unclaimedParticipants.map((p) => (
+            <div key={p.id}>
+              <button
+                className="card"
+                onClick={() => handleTap(p)}
+                style={{
+                  border: selectedId === p.id
+                    ? '2px solid var(--color-primary)'
+                    : '2px solid var(--color-border)',
+                  background: selectedId === p.id
+                    ? 'var(--color-primary-light)'
+                    : 'var(--color-surface)',
+                  cursor: 'pointer',
+                  textAlign: 'center',
+                  fontSize: 18,
+                  fontWeight: 600,
+                  padding: '20px',
+                  transition: 'border-color 0.15s, background 0.15s',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 10,
+                  width: '100%',
+                  borderRadius: selectedId === p.id
+                    ? 'var(--radius-md) var(--radius-md) 0 0'
+                    : 'var(--radius-md)',
+                }}
+              >
+                {p.emoji && <span style={{ fontSize: 24 }}>{p.emoji}</span>}
+                {p.name}
+              </button>
+
+              {selectedId === p.id && (
+                <div style={{
+                  border: '2px solid var(--color-primary)',
+                  borderTop: 'none',
+                  borderRadius: '0 0 var(--radius-md) var(--radius-md)',
+                  padding: 16,
+                  background: 'var(--color-surface)',
+                }}>
+                  <p style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 10, textAlign: 'center' }}>
+                    Pick your emoji
+                  </p>
+                  <div style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: 6,
+                    justifyContent: 'center',
+                    marginBottom: 14,
+                  }}>
+                    {EMOJI_OPTIONS.map((emoji) => (
+                      <button
+                        key={emoji}
+                        type="button"
+                        onClick={() => setSelectedEmoji(emoji)}
+                        style={{
+                          background: selectedEmoji === emoji ? 'var(--color-primary-light)' : 'none',
+                          border: selectedEmoji === emoji
+                            ? '2px solid var(--color-primary)'
+                            : '2px solid transparent',
+                          borderRadius: 'var(--radius-sm)',
+                          cursor: 'pointer',
+                          fontSize: 22,
+                          padding: 5,
+                          lineHeight: 1,
+                        }}
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    className="btn btn-primary"
+                    onClick={handleConfirm}
+                    disabled={joining}
+                    style={{ width: '100%' }}
+                  >
+                    {joining ? 'Joining...' : `Join as ${selectedEmoji || ''} ${p.name}`}
+                  </button>
+                </div>
+              )}
+            </div>
+          ))
+        )}
       </div>
+
+      {/* Show who has already joined */}
+      {participants.some(p => p.claimed_by) && (
+        <div style={{ marginTop: 24, textAlign: 'center' }}>
+          <p style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 8 }}>
+            Already joined:
+          </p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
+            {participants.filter(p => p.claimed_by).map(p => (
+              <span key={p.id} className="chip" style={{ opacity: 0.7 }}>
+                {p.emoji && <span>{p.emoji}</span>} {p.name}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

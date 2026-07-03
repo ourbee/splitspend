@@ -49,7 +49,7 @@ export default function BalanceSummary() {
 
             return (
               <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontWeight: 500 }}>{p.name}</span>
+                <span style={{ fontWeight: 500 }}>{p.emoji || ''} {p.name}</span>
                 <span className={className}>{label}</span>
               </div>
             )

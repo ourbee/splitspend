@@ -109,7 +109,7 @@ export default function AddExpenseModal({ onClose }) {
                   }}
                   onClick={() => setPaidBy(p.id)}
                 >
-                  {p.name}
+                  {p.emoji || ''} {p.name}
                 </button>
               ))}
             </div>
@@ -147,7 +147,7 @@ export default function AddExpenseModal({ onClose }) {
                     }}
                     onClick={() => toggleParticipant(p.id)}
                   >
-                    {p.name}
+                    {p.emoji || ''} {p.name}
                   </button>
                 )
               })}

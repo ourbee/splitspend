@@ -20,6 +20,16 @@ export default function useRealtime(tripId) {
         { event: '*', schema: 'public', table: 'expense_splits' },
         () => fetchTrip(tripId)
       )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'participants', filter: `trip_id=eq.${tripId}` },
+        () => fetchTrip(tripId)
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'settlement_records', filter: `trip_id=eq.${tripId}` },
+        () => fetchTrip(tripId)
+      )
       .subscribe()
 
     return () => {
