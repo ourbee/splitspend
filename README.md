@@ -1,16 +1,71 @@
-# React + Vite
+# Splitspend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+**Split expenses, not friendships.**
 
-Currently, two official plugins are available:
+A sessionless, no-login expense-splitting web app. Create a group, share a
+link or QR code, and everyone can add expenses and see who owes whom — no
+accounts, no logins, no app install.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+**Live at [splitspend.vercel.app](https://splitspend.vercel.app)**
 
-## React Compiler
+## How it works
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+1. Create a group and add participant names.
+2. Share the link (or QR code) with the group.
+3. Everyone opens the link, taps their own name once, and starts adding
+   expenses — split equally or with custom per-person amounts.
+4. The app computes net balances and the minimum set of payments to settle
+   up, and tracks which payments have actually been made.
 
-## Expanding the ESLint configuration
+## Philosophy
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+- **No accounts.** Knowing the link *is* the access. Identity is remembered
+  per device; reopening the link later just works — and if a device isn't
+  recognized (new browser, cleared storage), one tap on
+  "Continue as *you*" picks up exactly where you left off.
+- **Your data, your export.** Every group can be exported to CSV/JSON at
+  any time.
+
+## Features
+
+- Equal or **unequal splits** (assign exact amounts per person)
+- Live sync across everyone's devices (Supabase Realtime broadcast)
+- Optimized settle-up suggestions (greedy creditor/debtor matching),
+  settlement recording with undo, and balances that always account for
+  payments already made
+- Expense editing, custom expense dates, and "added by" attribution
+- Emoji avatars, QR-code sharing, multi-currency
+- Works entirely in the browser — mobile-first UI
+
+## Tech stack
+
+- **Frontend:** React 19, Vite, React Router 7, Zustand
+- **Backend:** Supabase (PostgreSQL). All access goes through
+  `SECURITY DEFINER` RPC functions keyed by the group's UUID — the public
+  anon key has **no direct table access**.
+- **Hosting:** Vercel (SPA + a daily cron keep-alive for the free-tier
+  database)
+
+## Development
+
+```bash
+npm install
+cp .env.example .env   # add your Supabase URL + anon key
+npm run dev
+```
+
+Database setup: run `supabase-schema.sql` in the Supabase SQL editor, then
+section 3 of `supabase-migration-v4.sql` (the RPC definitions). Upgrading
+an existing v2/v3 install: run `supabase-migration-v4.sql` then
+`supabase-hardening-v4.sql`.
+
+## Version history
+
+- **v1** — basic splitting, QR sharing, CSV export
+- **v2** — identities ("Who are you?"), emoji avatars, settlement tracking
+- **v3** — expense editing, device recognition, neutral language
+- **v4** — welcome-back identity flow with multi-device support, unequal
+  splits, corrected settlement math, RPC-hardened database, expense dates
+  and attribution, in-app confirmations, link previews, keep-alive cron
+
+Created by **Ritwik Balo**.
