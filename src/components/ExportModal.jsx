@@ -22,7 +22,6 @@ export default function ExportModal({ onClose }) {
       },
       participants: participants.map(p => ({
         name: p.name,
-        emoji: p.emoji,
       })),
       expenses: expenses.map(exp => ({
         description: exp.description,
@@ -56,7 +55,7 @@ export default function ExportModal({ onClose }) {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ textAlign: 'center' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <h2 style={{ fontSize: 18, fontWeight: 700 }}>Export Trip Data</h2>
+          <h2 style={{ fontSize: 18, fontWeight: 700 }}>Export Data</h2>
           <button className="btn-ghost" onClick={onClose} style={{ fontSize: 22 }}>&times;</button>
         </div>
 

@@ -1,8 +1,8 @@
 import useTripStore from '../store/tripStore'
 
-const CURRENCY_SYMBOLS = { INR: '\u20b9', USD: '$', EUR: '\u20ac', GBP: '\u00a3' }
+const CURRENCY_SYMBOLS = { INR: '₹', USD: '$', EUR: '€', GBP: '£' }
 
-export default function ExpenseCard({ expense, onDelete }) {
+export default function ExpenseCard({ expense, onDelete, onEdit }) {
   const participants = useTripStore((s) => s.participants)
   const trip = useTripStore((s) => s.trip)
   const symbol = CURRENCY_SYMBOLS[trip?.currency] || trip?.currency || ''
@@ -33,15 +33,25 @@ export default function ExpenseCard({ expense, onDelete }) {
           Split: {splitLabel}
         </div>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
         <span style={{ fontWeight: 700, fontSize: 16, whiteSpace: 'nowrap' }}>
           {symbol}{Number(expense.amount).toLocaleString()}
         </span>
+        {onEdit && (
+          <button
+            className="btn-ghost"
+            onClick={() => onEdit(expense)}
+            style={{ fontSize: 15, color: 'var(--color-text-muted)', padding: '4px' }}
+            title="Edit expense"
+          >
+            &#9998;
+          </button>
+        )}
         {onDelete && (
           <button
             className="btn-ghost"
             onClick={() => onDelete(expense.id)}
-            style={{ fontSize: 18, color: 'var(--color-text-muted)' }}
+            style={{ fontSize: 18, color: 'var(--color-text-muted)', padding: '4px' }}
             title="Delete expense"
           >
             &times;

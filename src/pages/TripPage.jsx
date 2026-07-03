@@ -23,6 +23,7 @@ export default function TripPage() {
 
   const [activeTab, setActiveTab] = useState('expenses')
   const [showAddExpense, setShowAddExpense] = useState(false)
+  const [editingExpense, setEditingExpense] = useState(null)
   const [showQR, setShowQR] = useState(false)
   const [showAddParticipant, setShowAddParticipant] = useState(false)
   const [showExport, setShowExport] = useState(false)
@@ -68,14 +69,23 @@ export default function TripPage() {
     return (
       <div className="container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div className="error-message">
-          <p style={{ fontSize: 20, marginBottom: 8 }}>Trip not found</p>
-          <p>This link may be invalid or the trip may have been deleted.</p>
+          <p style={{ fontSize: 20, marginBottom: 8 }}>Not found</p>
+          <p>This link may be invalid or the data may have been deleted.</p>
         </div>
       </div>
     )
   }
 
   const creator = isCreator()
+
+  const handleEdit = (expense) => {
+    setEditingExpense(expense)
+  }
+
+  const handleCloseExpenseModal = () => {
+    setShowAddExpense(false)
+    setEditingExpense(null)
+  }
 
   return (
     <div className="container" style={{ paddingTop: 16, paddingBottom: 100 }}>
@@ -178,7 +188,7 @@ export default function TripPage() {
       </div>
 
       {/* Tab Content */}
-      {activeTab === 'expenses' && <ExpenseList />}
+      {activeTab === 'expenses' && <ExpenseList onEdit={handleEdit} />}
       {activeTab === 'balances' && <BalanceSummary />}
       {activeTab === 'settle' && <SettlementList />}
 
@@ -188,8 +198,11 @@ export default function TripPage() {
       </button>
 
       {/* Modals */}
-      {showAddExpense && (
-        <AddExpenseModal onClose={() => setShowAddExpense(false)} />
+      {(showAddExpense || editingExpense) && (
+        <AddExpenseModal
+          onClose={handleCloseExpenseModal}
+          expense={editingExpense}
+        />
       )}
       {showQR && (
         <QRCodeDisplay tripId={tripId} onClose={() => setShowQR(false)} />

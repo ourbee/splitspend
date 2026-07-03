@@ -1,11 +1,10 @@
 import { calculateSettlements } from './settlement'
 
-const CURRENCY_SYMBOLS = { INR: '\u20b9', USD: '$', EUR: '\u20ac', GBP: '\u00a3' }
+const CURRENCY_SYMBOLS = { INR: '₹', USD: '$', EUR: '€', GBP: '£' }
 
 export function exportTripToCSV(trip, participants, expenses, settlementRecords) {
   const symbol = CURRENCY_SYMBOLS[trip.currency] || trip.currency || ''
   const getName = (id) => participants.find(p => p.id === id)?.name || 'Unknown'
-  const getEmoji = (id) => participants.find(p => p.id === id)?.emoji || ''
 
   const lines = []
 
@@ -18,9 +17,9 @@ export function exportTripToCSV(trip, participants, expenses, settlementRecords)
 
   // Participants
   lines.push('PARTICIPANTS')
-  lines.push('Name,Emoji')
+  lines.push('Name')
   for (const p of participants) {
-    lines.push(`${csvEscape(p.name)},${p.emoji || ''}`)
+    lines.push(csvEscape(p.name))
   }
   lines.push('')
 

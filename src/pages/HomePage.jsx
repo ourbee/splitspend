@@ -25,6 +25,11 @@ export default function HomePage() {
   return (
     <div className="container" style={{ paddingTop: 60, paddingBottom: 40 }}>
       <div style={{ textAlign: 'center', marginBottom: 40 }}>
+        <img
+          src="/favicon.svg"
+          alt="Splitspend"
+          style={{ width: 56, height: 56, marginBottom: 12, borderRadius: 12 }}
+        />
         <h1 style={{ fontSize: 32, fontWeight: 700, marginBottom: 8 }}>
           Splitspend
         </h1>

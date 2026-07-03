@@ -1,16 +1,23 @@
 import { useState } from 'react'
 import useTripStore from '../store/tripStore'
 
-export default function AddExpenseModal({ onClose }) {
+export default function AddExpenseModal({ onClose, expense }) {
   const trip = useTripStore((s) => s.trip)
   const participants = useTripStore((s) => s.participants)
   const addExpense = useTripStore((s) => s.addExpense)
+  const updateExpense = useTripStore((s) => s.updateExpense)
 
-  const [description, setDescription] = useState('')
-  const [amount, setAmount] = useState('')
-  const [paidBy, setPaidBy] = useState(participants[0]?.id || '')
-  const [splitAll, setSplitAll] = useState(true)
-  const [splitAmong, setSplitAmong] = useState(participants.map((p) => p.id))
+  const isEdit = !!expense
+
+  const [description, setDescription] = useState(isEdit ? expense.description : '')
+  const [amount, setAmount] = useState(isEdit ? String(expense.amount) : '')
+  const [paidBy, setPaidBy] = useState(isEdit ? expense.paid_by : (participants[0]?.id || ''))
+  const [splitAll, setSplitAll] = useState(
+    isEdit ? expense.splits.length === participants.length : true
+  )
+  const [splitAmong, setSplitAmong] = useState(
+    isEdit ? expense.splits.map((s) => s.participant_id) : participants.map((p) => p.id)
+  )
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
@@ -46,7 +53,11 @@ export default function AddExpenseModal({ onClose }) {
     setLoading(true)
     setError(null)
     try {
-      await addExpense(trip.id, description.trim(), parsedAmount, paidBy, splitAmong)
+      if (isEdit) {
+        await updateExpense(expense.id, trip.id, description.trim(), parsedAmount, paidBy, splitAmong)
+      } else {
+        await addExpense(trip.id, description.trim(), parsedAmount, paidBy, splitAmong)
+      }
       onClose()
     } catch (err) {
       setError(err.message)
@@ -58,7 +69,7 @@ export default function AddExpenseModal({ onClose }) {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <h2 style={{ fontSize: 18, fontWeight: 700 }}>Add Expense</h2>
+          <h2 style={{ fontSize: 18, fontWeight: 700 }}>{isEdit ? 'Edit Expense' : 'Add Expense'}</h2>
           <button className="btn-ghost" onClick={onClose} style={{ fontSize: 22 }}>&times;</button>
         </div>
 
@@ -95,7 +106,7 @@ export default function AddExpenseModal({ onClose }) {
                 <button
                   key={p.id}
                   type="button"
-                  className={paidBy === p.id ? 'chip' : 'chip'}
+                  className="chip"
                   style={paidBy === p.id ? {
                     background: 'var(--color-primary)',
                     color: 'white',
@@ -167,7 +178,7 @@ export default function AddExpenseModal({ onClose }) {
           )}
 
           <button type="submit" className="btn btn-primary" disabled={!canSubmit}>
-            {loading ? 'Adding...' : 'Add Expense'}
+            {loading ? (isEdit ? 'Saving...' : 'Adding...') : (isEdit ? 'Save Changes' : 'Add Expense')}
           </button>
         </form>
       </div>

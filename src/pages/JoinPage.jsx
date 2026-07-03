@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import useTripStore from '../store/tripStore'
 import useTrip from '../hooks/useTrip'
@@ -9,6 +9,7 @@ export default function JoinPage() {
   const navigate = useNavigate()
   const trip = useTripStore((s) => s.trip)
   const participants = useTripStore((s) => s.participants)
+  const myIdentity = useTripStore((s) => s.myIdentity)
   const loading = useTripStore((s) => s.loading)
   const error = useTripStore((s) => s.error)
   const claimIdentity = useTripStore((s) => s.claimIdentity)
@@ -20,8 +21,16 @@ export default function JoinPage() {
 
   useTrip(tripId)
 
+  // Redirect returning users who already have an identity
+  useEffect(() => {
+    if (!loading && trip && myIdentity) {
+      navigate(`/trip/${tripId}`, { replace: true })
+    }
+  }, [loading, trip, myIdentity, tripId, navigate])
+
   // Filter out already-claimed participants
   const unclaimedParticipants = participants.filter((p) => !p.claimed_by)
+  const claimedParticipants = participants.filter((p) => p.claimed_by)
 
   const handleTap = (participant) => {
     if (selectedId === participant.id) {
@@ -48,6 +57,16 @@ export default function JoinPage() {
     }
   }
 
+  const handleRejoin = async (participant) => {
+    setJoining(true)
+    try {
+      await claimIdentity(tripId, participant.id)
+      navigate(`/trip/${tripId}`)
+    } catch {
+      setJoining(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -60,8 +79,8 @@ export default function JoinPage() {
     return (
       <div className="container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div className="error-message">
-          <p style={{ fontSize: 20, marginBottom: 8 }}>Trip not found</p>
-          <p>This link may be invalid or the trip may have been deleted.</p>
+          <p style={{ fontSize: 20, marginBottom: 8 }}>Not found</p>
+          <p>This link may be invalid or the data may have been deleted.</p>
         </div>
       </div>
     )
@@ -82,10 +101,10 @@ export default function JoinPage() {
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {unclaimedParticipants.length === 0 ? (
+        {unclaimedParticipants.length === 0 && claimedParticipants.length > 0 ? (
           <div className="empty-state">
             <p style={{ fontSize: 18, marginBottom: 8 }}>All identities have been claimed</p>
-            <p>Everyone in this trip has already joined.</p>
+            <p>If you were already part of this group, tap your name below to rejoin.</p>
           </div>
         ) : (
           unclaimedParticipants.map((p) => (
@@ -174,17 +193,43 @@ export default function JoinPage() {
         )}
       </div>
 
-      {/* Show who has already joined */}
-      {participants.some(p => p.claimed_by) && (
-        <div style={{ marginTop: 24, textAlign: 'center' }}>
-          <p style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 8 }}>
+      {/* Show claimed participants with rejoin option */}
+      {claimedParticipants.length > 0 && (
+        <div style={{ marginTop: 24 }}>
+          <p style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 8, textAlign: 'center' }}>
             Already joined:
           </p>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
-            {participants.filter(p => p.claimed_by).map(p => (
-              <span key={p.id} className="chip" style={{ opacity: 0.7 }}>
-                {p.emoji && <span>{p.emoji}</span>} {p.name}
-              </span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {claimedParticipants.map(p => (
+              <div
+                key={p.id}
+                className="card"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '12px 16px',
+                  opacity: 0.8,
+                }}
+              >
+                <span style={{ fontSize: 15 }}>
+                  {p.emoji && <span style={{ marginRight: 6 }}>{p.emoji}</span>}
+                  {p.name}
+                </span>
+                <button
+                  className="btn-ghost"
+                  onClick={() => handleRejoin(p)}
+                  disabled={joining}
+                  style={{
+                    fontSize: 13,
+                    color: 'var(--color-primary)',
+                    fontWeight: 600,
+                    padding: '4px 10px',
+                  }}
+                >
+                  This is me
+                </button>
+              </div>
             ))}
           </div>
         </div>

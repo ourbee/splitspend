@@ -1,7 +1,7 @@
 import useTripStore from '../store/tripStore'
 import ExpenseCard from './ExpenseCard'
 
-export default function ExpenseList() {
+export default function ExpenseList({ onEdit }) {
   const expenses = useTripStore((s) => s.expenses)
   const trip = useTripStore((s) => s.trip)
   const deleteExpense = useTripStore((s) => s.deleteExpense)
@@ -31,6 +31,7 @@ export default function ExpenseList() {
           key={expense.id}
           expense={expense}
           onDelete={handleDelete}
+          onEdit={onEdit}
         />
       ))}
     </div>

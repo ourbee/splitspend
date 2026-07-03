@@ -25,7 +25,7 @@ export default function QRCodeDisplay({ tripId, onClose }) {
 
   const shareLink = async () => {
     try {
-      await navigator.share({ url, title: 'Join my Splitspend trip' })
+      await navigator.share({ url, title: 'Join my Splitspend' })
     } catch {
       // Share cancelled or not supported
     }
@@ -35,7 +35,7 @@ export default function QRCodeDisplay({ tripId, onClose }) {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ textAlign: 'center' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <h2 style={{ fontSize: 18, fontWeight: 700 }}>Share Trip</h2>
+          <h2 style={{ fontSize: 18, fontWeight: 700 }}>Share</h2>
           <button className="btn-ghost" onClick={onClose} style={{ fontSize: 22 }}>&times;</button>
         </div>
 

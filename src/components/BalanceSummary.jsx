@@ -1,7 +1,7 @@
 import useTripStore from '../store/tripStore'
 import { calculateSettlements } from '../lib/settlement'
 
-const CURRENCY_SYMBOLS = { INR: '\u20b9', USD: '$', EUR: '\u20ac', GBP: '\u00a3' }
+const CURRENCY_SYMBOLS = { INR: '₹', USD: '$', EUR: '€', GBP: '£' }
 
 export default function BalanceSummary() {
   const participants = useTripStore((s) => s.participants)
@@ -25,7 +25,7 @@ export default function BalanceSummary() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div className="card" style={{ textAlign: 'center', padding: 20 }}>
-        <div style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 4 }}>Total Trip Spend</div>
+        <div style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 4 }}>Total Spend</div>
         <div style={{ fontSize: 28, fontWeight: 700 }}>{symbol}{totalSpend.toLocaleString()}</div>
       </div>
 

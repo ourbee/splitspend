@@ -2,10 +2,10 @@ import { useState } from 'react'
 import { EMOJI_OPTIONS, getRandomEmoji } from '../lib/emojis'
 
 const CURRENCIES = [
-  { code: 'INR', symbol: '\u20b9', label: 'INR (\u20b9)' },
+  { code: 'INR', symbol: '₹', label: 'INR (₹)' },
   { code: 'USD', symbol: '$', label: 'USD ($)' },
-  { code: 'EUR', symbol: '\u20ac', label: 'EUR (\u20ac)' },
-  { code: 'GBP', symbol: '\u00a3', label: 'GBP (\u00a3)' },
+  { code: 'EUR', symbol: '€', label: 'EUR (€)' },
+  { code: 'GBP', symbol: '£', label: 'GBP (£)' },
 ]
 
 export default function CreateTripForm({ onSubmit, loading }) {
@@ -62,10 +62,10 @@ export default function CreateTripForm({ onSubmit, loading }) {
   return (
     <form onSubmit={handleSubmit} className="card" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div>
-        <label className="label">Trip Name</label>
+        <label className="label">Name</label>
         <input
           className="input"
-          placeholder="e.g. Goa Trip 2026"
+          placeholder="e.g. Goa Trip, Flat Expenses, Dinner"
           value={tripName}
           onChange={(e) => setTripName(e.target.value)}
           autoFocus

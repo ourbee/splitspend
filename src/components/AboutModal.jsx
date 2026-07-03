@@ -28,7 +28,7 @@ export default function AboutModal({ onClose }) {
             No accounts. No logins. Just share a link and split expenses with friends.
           </p>
           <p style={{ color: 'var(--color-text-muted)' }}>
-            Your trip data lives as long as the link does. Export anytime to keep a local copy.
+            Your data lives as long as the link does. Export anytime to keep a local copy.
           </p>
         </div>
 

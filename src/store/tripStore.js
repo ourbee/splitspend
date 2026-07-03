@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { supabase } from '../lib/supabase'
+import { getDeviceId } from '../lib/deviceId'
 
 const useTripStore = create((set, get) => ({
   trip: null,
@@ -50,7 +51,17 @@ const useTripStore = create((set, get) => ({
       if (settleError) throw settleError
 
       // Load identity from localStorage
-      const savedIdentity = localStorage.getItem(`splitspend_identity_${tripId}`)
+      let savedIdentity = localStorage.getItem(`splitspend_identity_${tripId}`)
+
+      // Device-id recovery: if no per-trip identity, check if device_id matches a claimed participant
+      if (!savedIdentity) {
+        const deviceId = getDeviceId()
+        const matched = participants.find(p => p.claimed_by === deviceId)
+        if (matched) {
+          savedIdentity = matched.id
+          localStorage.setItem(`splitspend_identity_${tripId}`, matched.id)
+        }
+      }
 
       set({
         trip,
@@ -92,10 +103,11 @@ const useTripStore = create((set, get) => ({
     // Set the creator
     const creatorId = participants[creatorIndex]?.id || participants[0].id
 
-    // Mark creator as claimed
+    // Mark creator as claimed with device_id
+    const deviceId = getDeviceId()
     await supabase
       .from('participants')
-      .update({ claimed_by: creatorId })
+      .update({ claimed_by: deviceId })
       .eq('id', creatorId)
 
     // Update trip with creator_id
@@ -110,7 +122,7 @@ const useTripStore = create((set, get) => ({
     set({
       trip: { ...trip, creator_id: creatorId },
       participants: participants.map(p =>
-        p.id === creatorId ? { ...p, claimed_by: creatorId } : p
+        p.id === creatorId ? { ...p, claimed_by: deviceId } : p
       ),
       expenses: [],
       settlementRecords: [],
@@ -131,8 +143,31 @@ const useTripStore = create((set, get) => ({
       share_amount: idx === 0 ? shareAmount + remainder : shareAmount,
     }))
 
-    const { data: expenseId, error } = await supabase.rpc('add_expense', {
+    const { error } = await supabase.rpc('add_expense', {
       p_trip_id: tripId,
+      p_description: description,
+      p_amount: amount,
+      p_paid_by: paidBy,
+      p_splits: splits,
+    })
+
+    if (error) throw error
+    await get().fetchTrip(tripId)
+  },
+
+  updateExpense: async (expenseId, tripId, description, amount, paidBy, splitAmong) => {
+    if (!supabase) throw new Error('Supabase not configured')
+
+    const shareAmount = Math.floor((amount * 100) / splitAmong.length) / 100
+    const remainder = Math.round((amount - shareAmount * splitAmong.length) * 100) / 100
+
+    const splits = splitAmong.map((participantId, idx) => ({
+      participant_id: participantId,
+      share_amount: idx === 0 ? shareAmount + remainder : shareAmount,
+    }))
+
+    const { error } = await supabase.rpc('update_expense', {
+      p_expense_id: expenseId,
       p_description: description,
       p_amount: amount,
       p_paid_by: paidBy,
@@ -200,9 +235,10 @@ const useTripStore = create((set, get) => ({
   claimIdentity: async (tripId, participantId) => {
     if (!supabase) throw new Error('Supabase not configured')
 
+    const deviceId = getDeviceId()
     await supabase
       .from('participants')
-      .update({ claimed_by: participantId })
+      .update({ claimed_by: deviceId })
       .eq('id', participantId)
 
     localStorage.setItem(`splitspend_identity_${tripId}`, participantId)
