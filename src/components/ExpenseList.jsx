@@ -1,18 +1,27 @@
+import { useState } from 'react'
 import useTripStore from '../store/tripStore'
 import ExpenseCard from './ExpenseCard'
+import ConfirmDialog from './ConfirmDialog'
 
 export default function ExpenseList({ onEdit }) {
   const expenses = useTripStore((s) => s.expenses)
   const trip = useTripStore((s) => s.trip)
   const deleteExpense = useTripStore((s) => s.deleteExpense)
 
-  const handleDelete = async (expenseId) => {
-    if (!window.confirm('Delete this expense?')) return
+  const [confirmingId, setConfirmingId] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState(null)
+
+  const handleDelete = async () => {
+    setBusy(true)
+    setError(null)
     try {
-      await deleteExpense(expenseId, trip.id)
+      await deleteExpense(confirmingId, trip.id)
+      setConfirmingId(null)
     } catch (err) {
-      alert('Failed to delete: ' + err.message)
+      setError('Failed to delete: ' + err.message)
     }
+    setBusy(false)
   }
 
   if (expenses.length === 0) {
@@ -30,10 +39,23 @@ export default function ExpenseList({ onEdit }) {
         <ExpenseCard
           key={expense.id}
           expense={expense}
-          onDelete={handleDelete}
+          onDelete={(id) => { setError(null); setConfirmingId(id) }}
           onEdit={onEdit}
         />
       ))}
+
+      {confirmingId && (
+        <ConfirmDialog
+          title="Delete this expense?"
+          message="This removes it for everyone in the group."
+          confirmLabel="Delete"
+          danger
+          busy={busy}
+          error={error}
+          onConfirm={handleDelete}
+          onCancel={() => setConfirmingId(null)}
+        />
+      )}
     </div>
   )
 }

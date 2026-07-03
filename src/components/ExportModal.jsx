@@ -27,11 +27,12 @@ export default function ExportModal({ onClose }) {
         description: exp.description,
         amount: Number(exp.amount),
         paid_by: participants.find(p => p.id === exp.paid_by)?.name || 'Unknown',
+        added_by: participants.find(p => p.id === exp.created_by)?.name || null,
         split_among: exp.splits.map(s => ({
           name: participants.find(p => p.id === s.participant_id)?.name || 'Unknown',
           share: Number(s.share_amount),
         })),
-        date: exp.created_at,
+        date: exp.expense_date || exp.created_at,
       })),
       settlement_records: settlementRecords.map(rec => ({
         from: participants.find(p => p.id === rec.from_participant)?.name || 'Unknown',

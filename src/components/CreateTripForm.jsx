@@ -1,12 +1,6 @@
 import { useState } from 'react'
 import { EMOJI_OPTIONS, getRandomEmoji } from '../lib/emojis'
-
-const CURRENCIES = [
-  { code: 'INR', symbol: '₹', label: 'INR (₹)' },
-  { code: 'USD', symbol: '$', label: 'USD ($)' },
-  { code: 'EUR', symbol: '€', label: 'EUR (€)' },
-  { code: 'GBP', symbol: '£', label: 'GBP (£)' },
-]
+import { CURRENCIES } from '../lib/currency'
 
 export default function CreateTripForm({ onSubmit, loading }) {
   const [tripName, setTripName] = useState('')

@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { supabase } from '../lib/supabase'
+import { subscribeTripChannel, unsubscribeTripChannel } from '../lib/realtime'
 import useTripStore from '../store/tripStore'
 
 export default function useRealtime(tripId) {
@@ -8,32 +9,18 @@ export default function useRealtime(tripId) {
   useEffect(() => {
     if (!tripId || !supabase) return
 
-    const channel = supabase
-      .channel(`trip-${tripId}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'expenses', filter: `trip_id=eq.${tripId}` },
-        () => fetchTrip(tripId)
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'expense_splits' },
-        () => fetchTrip(tripId)
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'participants', filter: `trip_id=eq.${tripId}` },
-        () => fetchTrip(tripId)
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'settlement_records', filter: `trip_id=eq.${tripId}` },
-        () => fetchTrip(tripId)
-      )
-      .subscribe()
+    subscribeTripChannel(tripId, () => fetchTrip(tripId))
+
+    // Broadcast events can be missed while the tab is backgrounded or the
+    // connection drops — refetch whenever the tab becomes visible again.
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') fetchTrip(tripId)
+    }
+    document.addEventListener('visibilitychange', onVisible)
 
     return () => {
-      supabase.removeChannel(channel)
+      document.removeEventListener('visibilitychange', onVisible)
+      unsubscribeTripChannel()
     }
   }, [tripId, fetchTrip])
 }

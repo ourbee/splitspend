@@ -1,6 +1,13 @@
 import { create } from 'zustand'
 import { supabase } from '../lib/supabase'
 import { getDeviceId } from '../lib/deviceId'
+import { broadcastRefresh } from '../lib/realtime'
+import { rememberTrip } from '../lib/recentTrips'
+
+// All reads and writes go through SECURITY DEFINER RPCs keyed by the trip
+// UUID — the anon key has no direct table access (see supabase-schema.sql).
+
+const identityKey = (tripId) => `splitspend_identity_${tripId}`
 
 const useTripStore = create((set, get) => ({
   trip: null,
@@ -16,60 +23,46 @@ const useTripStore = create((set, get) => ({
       set({ error: 'Supabase not configured', loading: false })
       return
     }
-    set({ loading: true, error: null })
+    // Only show the full-page spinner on first load, not on realtime refreshes
+    if (get().trip?.id !== tripId) {
+      set({ loading: true, error: null })
+    }
     try {
-      const { data: trip, error: tripError } = await supabase
-        .from('trips')
-        .select('*')
-        .eq('id', tripId)
-        .single()
+      const { data, error } = await supabase.rpc('get_trip_data', {
+        p_trip_id: tripId,
+        p_device_id: getDeviceId(),
+      })
+      if (error) throw error
+      if (!data) throw new Error('Not found')
 
-      if (tripError) throw tripError
+      const participants = data.participants || []
 
-      const { data: participants, error: partError } = await supabase
-        .from('participants')
-        .select('*')
-        .eq('trip_id', tripId)
-        .order('created_at')
-
-      if (partError) throw partError
-
-      const { data: expenses, error: expError } = await supabase
-        .from('expenses')
-        .select('*, splits:expense_splits(*)')
-        .eq('trip_id', tripId)
-        .order('created_at', { ascending: false })
-
-      if (expError) throw expError
-
-      const { data: settlementRecords, error: settleError } = await supabase
-        .from('settlement_records')
-        .select('*')
-        .eq('trip_id', tripId)
-        .order('settled_at', { ascending: false })
-
-      if (settleError) throw settleError
-
-      // Load identity from localStorage
-      let savedIdentity = localStorage.getItem(`splitspend_identity_${tripId}`)
-
-      // Device-id recovery: if no per-trip identity, check if device_id matches a claimed participant
-      if (!savedIdentity) {
-        const deviceId = getDeviceId()
-        const matched = participants.find(p => p.claimed_by === deviceId)
-        if (matched) {
-          savedIdentity = matched.id
-          localStorage.setItem(`splitspend_identity_${tripId}`, matched.id)
+      // Identity: the server's device match is authoritative; localStorage
+      // is the fast path when it survives.
+      let myIdentity = null
+      const mine = participants.find((p) => p.is_me)
+      if (mine) {
+        myIdentity = mine.id
+        localStorage.setItem(identityKey(tripId), mine.id)
+      } else {
+        const saved = localStorage.getItem(identityKey(tripId))
+        if (saved && participants.some((p) => p.id === saved)) {
+          myIdentity = saved
+        } else {
+          localStorage.removeItem(identityKey(tripId))
         }
       }
 
+      rememberTrip(tripId, data.trip.name)
+
       set({
-        trip,
+        trip: data.trip,
         participants,
-        expenses,
-        settlementRecords: settlementRecords || [],
-        myIdentity: savedIdentity,
+        expenses: data.expenses || [],
+        settlementRecords: data.settlement_records || [],
+        myIdentity,
         loading: false,
+        error: null,
       })
     } catch (error) {
       set({ error: error.message, loading: false })
@@ -79,192 +72,174 @@ const useTripStore = create((set, get) => ({
   createTrip: async (name, currency, participantData, creatorIndex) => {
     if (!supabase) throw new Error('Supabase not configured. Add your credentials to .env')
 
-    const { data: trip, error: tripError } = await supabase
-      .from('trips')
-      .insert({ name, currency })
-      .select()
-      .single()
-
-    if (tripError) throw tripError
-
-    const participantRows = participantData.map((p) => ({
-      trip_id: trip.id,
-      name: p.name,
-      emoji: p.emoji || '',
-    }))
-
-    const { data: participants, error: partError } = await supabase
-      .from('participants')
-      .insert(participantRows)
-      .select()
-
-    if (partError) throw partError
-
-    // Set the creator
-    const creatorId = participants[creatorIndex]?.id || participants[0].id
-
-    // Mark creator as claimed with device_id
-    const deviceId = getDeviceId()
-    await supabase
-      .from('participants')
-      .update({ claimed_by: deviceId })
-      .eq('id', creatorId)
-
-    // Update trip with creator_id
-    await supabase
-      .from('trips')
-      .update({ creator_id: creatorId })
-      .eq('id', trip.id)
-
-    localStorage.setItem(`splitspend_identity_${trip.id}`, creatorId)
-    localStorage.setItem(`splitspend_creator_${trip.id}`, 'true')
-
-    set({
-      trip: { ...trip, creator_id: creatorId },
-      participants: participants.map(p =>
-        p.id === creatorId ? { ...p, claimed_by: deviceId } : p
-      ),
-      expenses: [],
-      settlementRecords: [],
-      myIdentity: creatorId,
-      loading: false,
+    const { data: tripId, error } = await supabase.rpc('create_trip_v4', {
+      p_name: name,
+      p_currency: currency,
+      p_participants: participantData.map((p) => ({ name: p.name, emoji: p.emoji || '' })),
+      p_creator_index: creatorIndex,
+      p_device_id: getDeviceId(),
     })
-    return trip.id
+    if (error) throw error
+
+    localStorage.setItem(`splitspend_creator_${tripId}`, 'true')
+    rememberTrip(tripId, name)
+
+    await get().fetchTrip(tripId)
+    return tripId
   },
 
-  addExpense: async (tripId, description, amount, paidBy, splitAmong) => {
+  addExpense: async (tripId, description, amount, paidBy, splits, expenseDate) => {
     if (!supabase) throw new Error('Supabase not configured')
 
-    const shareAmount = Math.floor((amount * 100) / splitAmong.length) / 100
-    const remainder = Math.round((amount - shareAmount * splitAmong.length) * 100) / 100
-
-    const splits = splitAmong.map((participantId, idx) => ({
-      participant_id: participantId,
-      share_amount: idx === 0 ? shareAmount + remainder : shareAmount,
-    }))
-
-    const { error } = await supabase.rpc('add_expense', {
+    const { error } = await supabase.rpc('add_expense_v4', {
       p_trip_id: tripId,
       p_description: description,
       p_amount: amount,
       p_paid_by: paidBy,
       p_splits: splits,
+      p_created_by: get().myIdentity,
+      p_expense_date: expenseDate || null,
     })
-
     if (error) throw error
+
+    broadcastRefresh(tripId)
     await get().fetchTrip(tripId)
   },
 
-  updateExpense: async (expenseId, tripId, description, amount, paidBy, splitAmong) => {
+  updateExpense: async (expenseId, tripId, description, amount, paidBy, splits, expenseDate) => {
     if (!supabase) throw new Error('Supabase not configured')
 
-    const shareAmount = Math.floor((amount * 100) / splitAmong.length) / 100
-    const remainder = Math.round((amount - shareAmount * splitAmong.length) * 100) / 100
-
-    const splits = splitAmong.map((participantId, idx) => ({
-      participant_id: participantId,
-      share_amount: idx === 0 ? shareAmount + remainder : shareAmount,
-    }))
-
-    const { error } = await supabase.rpc('update_expense', {
+    const { error } = await supabase.rpc('update_expense_v4', {
+      p_trip_id: tripId,
       p_expense_id: expenseId,
       p_description: description,
       p_amount: amount,
       p_paid_by: paidBy,
       p_splits: splits,
+      p_expense_date: expenseDate || null,
     })
-
     if (error) throw error
+
+    broadcastRefresh(tripId)
     await get().fetchTrip(tripId)
   },
 
   deleteExpense: async (expenseId, tripId) => {
     if (!supabase) throw new Error('Supabase not configured')
 
-    const { error } = await supabase
-      .from('expenses')
-      .delete()
-      .eq('id', expenseId)
-
+    const { error } = await supabase.rpc('delete_expense_v4', {
+      p_trip_id: tripId,
+      p_expense_id: expenseId,
+    })
     if (error) throw error
+
+    broadcastRefresh(tripId)
     await get().fetchTrip(tripId)
   },
 
   recordSettlement: async (tripId, fromId, toId, amount) => {
     if (!supabase) throw new Error('Supabase not configured')
 
-    const { error } = await supabase
-      .from('settlement_records')
-      .insert({
-        trip_id: tripId,
-        from_participant: fromId,
-        to_participant: toId,
-        amount,
-      })
-
+    const { error } = await supabase.rpc('record_settlement_v4', {
+      p_trip_id: tripId,
+      p_from: fromId,
+      p_to: toId,
+      p_amount: amount,
+    })
     if (error) throw error
+
+    broadcastRefresh(tripId)
     await get().fetchTrip(tripId)
   },
 
   undoSettlement: async (settlementId, tripId) => {
     if (!supabase) throw new Error('Supabase not configured')
 
-    const { error } = await supabase
-      .from('settlement_records')
-      .delete()
-      .eq('id', settlementId)
-
+    const { error } = await supabase.rpc('undo_settlement_v4', {
+      p_trip_id: tripId,
+      p_settlement_id: settlementId,
+    })
     if (error) throw error
+
+    broadcastRefresh(tripId)
     await get().fetchTrip(tripId)
   },
 
   addParticipant: async (tripId, name, emoji) => {
     if (!supabase) throw new Error('Supabase not configured')
 
-    const { data, error } = await supabase
-      .from('participants')
-      .insert({ trip_id: tripId, name, emoji: emoji || '' })
-      .select()
-      .single()
-
+    const { data, error } = await supabase.rpc('add_participant_v4', {
+      p_trip_id: tripId,
+      p_name: name,
+      p_emoji: emoji || '',
+    })
     if (error) throw error
+
+    broadcastRefresh(tripId)
     await get().fetchTrip(tripId)
     return data
   },
 
-  claimIdentity: async (tripId, participantId) => {
+  // "Join as X" (expectUnclaimed: fails with error.code TAKEN if someone
+  // else grabbed X first) or "Continue as X" welcome-back (expectUnclaimed
+  // false: registers this device as another device of X).
+  claimIdentity: async (tripId, participantId, { expectUnclaimed = false, emoji = null } = {}) => {
     if (!supabase) throw new Error('Supabase not configured')
 
-    const deviceId = getDeviceId()
-    await supabase
-      .from('participants')
-      .update({ claimed_by: deviceId })
-      .eq('id', participantId)
+    const { data, error } = await supabase.rpc('claim_identity_v4', {
+      p_trip_id: tripId,
+      p_participant_id: participantId,
+      p_device_id: getDeviceId(),
+      p_expect_unclaimed: expectUnclaimed,
+      p_emoji: emoji,
+    })
+    if (error) throw error
+    if (!data?.ok) {
+      const err = new Error('This identity was just taken by someone else')
+      err.code = 'TAKEN'
+      throw err
+    }
 
-    localStorage.setItem(`splitspend_identity_${tripId}`, participantId)
+    localStorage.setItem(identityKey(tripId), participantId)
     set({ myIdentity: participantId })
+    broadcastRefresh(tripId)
+    await get().fetchTrip(tripId)
   },
 
-  updateParticipantEmoji: async (participantId, emoji) => {
+  // Detach this device from its identity so the join page is shown again
+  switchIdentity: async (tripId) => {
     if (!supabase) throw new Error('Supabase not configured')
 
-    const { error } = await supabase
-      .from('participants')
-      .update({ emoji })
-      .eq('id', participantId)
+    const myIdentity = get().myIdentity
+    if (myIdentity) {
+      const { error } = await supabase.rpc('release_identity_v4', {
+        p_trip_id: tripId,
+        p_participant_id: myIdentity,
+        p_device_id: getDeviceId(),
+      })
+      if (error) throw error
+    }
+    localStorage.removeItem(identityKey(tripId))
+    set({ myIdentity: null })
+    broadcastRefresh(tripId)
+  },
 
+  updateParticipantEmoji: async (tripId, participantId, emoji) => {
+    if (!supabase) throw new Error('Supabase not configured')
+
+    const { error } = await supabase.rpc('update_participant_emoji_v4', {
+      p_trip_id: tripId,
+      p_participant_id: participantId,
+      p_emoji: emoji,
+    })
     if (error) throw error
 
     set((state) => ({
-      participants: state.participants.map(p =>
+      participants: state.participants.map((p) =>
         p.id === participantId ? { ...p, emoji } : p
       ),
     }))
-  },
-
-  setIdentity: (tripId, participantId) => {
-    localStorage.setItem(`splitspend_identity_${tripId}`, participantId)
-    set({ myIdentity: participantId })
+    broadcastRefresh(tripId)
   },
 
   isCreator: () => {

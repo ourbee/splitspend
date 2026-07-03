@@ -1,13 +1,13 @@
 import useTripStore from '../store/tripStore'
 import { calculateSettlements } from '../lib/settlement'
-
-const CURRENCY_SYMBOLS = { INR: '₹', USD: '$', EUR: '€', GBP: '£' }
+import { currencySymbol } from '../lib/currency'
 
 export default function BalanceSummary() {
   const participants = useTripStore((s) => s.participants)
   const expenses = useTripStore((s) => s.expenses)
+  const settlementRecords = useTripStore((s) => s.settlementRecords)
   const trip = useTripStore((s) => s.trip)
-  const symbol = CURRENCY_SYMBOLS[trip?.currency] || trip?.currency || ''
+  const symbol = currencySymbol(trip?.currency)
 
   if (expenses.length === 0) {
     return (
@@ -17,9 +17,10 @@ export default function BalanceSummary() {
     )
   }
 
-  const { balances } = calculateSettlements(participants, expenses)
+  // Balances include recorded settlements, so this tab always agrees
+  // with the Settle tab.
+  const { balances } = calculateSettlements(participants, expenses, settlementRecords)
 
-  // Calculate total trip spend
   const totalSpend = expenses.reduce((sum, e) => sum + Number(e.amount), 0)
 
   return (
@@ -55,6 +56,11 @@ export default function BalanceSummary() {
             )
           })}
         </div>
+        {settlementRecords.length > 0 && (
+          <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 12 }}>
+            Includes {settlementRecords.length} recorded settlement{settlementRecords.length > 1 ? 's' : ''}
+          </p>
+        )}
       </div>
     </div>
   )

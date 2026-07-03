@@ -1,9 +1,8 @@
 import { calculateSettlements } from './settlement'
-
-const CURRENCY_SYMBOLS = { INR: '₹', USD: '$', EUR: '€', GBP: '£' }
+import { currencySymbol } from './currency'
 
 export function exportTripToCSV(trip, participants, expenses, settlementRecords) {
-  const symbol = CURRENCY_SYMBOLS[trip.currency] || trip.currency || ''
+  const symbol = currencySymbol(trip.currency)
   const getName = (id) => participants.find(p => p.id === id)?.name || 'Unknown'
 
   const lines = []
@@ -25,19 +24,20 @@ export function exportTripToCSV(trip, participants, expenses, settlementRecords)
 
   // Expenses
   lines.push('EXPENSES')
-  lines.push('Description,Amount,Paid By,Split Among,Date')
+  lines.push('Description,Amount,Paid By,Shares,Added By,Date')
   for (const exp of expenses) {
     const payer = getName(exp.paid_by)
-    const splitNames = exp.splits
-      .map(s => getName(s.participant_id))
+    const shares = exp.splits
+      .map(s => `${getName(s.participant_id)}: ${Number(s.share_amount).toFixed(2)}`)
       .join('; ')
-    const date = new Date(exp.created_at).toLocaleDateString()
-    lines.push(`${csvEscape(exp.description)},${symbol}${Number(exp.amount).toFixed(2)},${csvEscape(payer)},${csvEscape(splitNames)},${date}`)
+    const addedBy = exp.created_by ? getName(exp.created_by) : ''
+    const date = new Date(exp.expense_date || exp.created_at).toLocaleDateString()
+    lines.push(`${csvEscape(exp.description)},${symbol}${Number(exp.amount).toFixed(2)},${csvEscape(payer)},${csvEscape(shares)},${csvEscape(addedBy)},${date}`)
   }
   lines.push('')
 
-  // Balances
-  const { balances, settlements } = calculateSettlements(participants, expenses)
+  // Balances (settlement records included as real transfers)
+  const { balances, settlements } = calculateSettlements(participants, expenses, settlementRecords)
   lines.push('NET BALANCES')
   lines.push('Name,Balance')
   for (const p of participants) {

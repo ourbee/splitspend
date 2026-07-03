@@ -1,23 +1,44 @@
 import { useState } from 'react'
 import useTripStore from '../store/tripStore'
+import { computeEqualSplits, isUnequalSplit, round2 } from '../lib/splits'
+import { currencySymbol } from '../lib/currency'
+
+function todayStr() {
+  const d = new Date()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${d.getFullYear()}-${m}-${day}`
+}
 
 export default function AddExpenseModal({ onClose, expense }) {
   const trip = useTripStore((s) => s.trip)
   const participants = useTripStore((s) => s.participants)
   const addExpense = useTripStore((s) => s.addExpense)
   const updateExpense = useTripStore((s) => s.updateExpense)
+  const symbol = currencySymbol(trip?.currency)
 
   const isEdit = !!expense
+  const editUnequal = isEdit && isUnequalSplit(expense.splits)
 
   const [description, setDescription] = useState(isEdit ? expense.description : '')
   const [amount, setAmount] = useState(isEdit ? String(expense.amount) : '')
   const [paidBy, setPaidBy] = useState(isEdit ? expense.paid_by : (participants[0]?.id || ''))
+  const [expenseDate, setExpenseDate] = useState(
+    isEdit && expense.expense_date ? expense.expense_date : todayStr()
+  )
+  const [splitMode, setSplitMode] = useState(editUnequal ? 'custom' : 'equal')
   const [splitAll, setSplitAll] = useState(
     isEdit ? expense.splits.length === participants.length : true
   )
   const [splitAmong, setSplitAmong] = useState(
     isEdit ? expense.splits.map((s) => s.participant_id) : participants.map((p) => p.id)
   )
+  const [customShares, setCustomShares] = useState(() => {
+    if (!isEdit) return {}
+    const shares = {}
+    for (const s of expense.splits) shares[s.participant_id] = String(Number(s.share_amount))
+    return shares
+  })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
@@ -43,8 +64,36 @@ export default function AddExpenseModal({ onClose, expense }) {
     }
   }
 
+  const setShare = (id, value) => {
+    setCustomShares({ ...customShares, [id]: value })
+  }
+
   const parsedAmount = parseFloat(amount)
-  const canSubmit = description.trim() && parsedAmount > 0 && paidBy && splitAmong.length > 0 && !loading
+
+  // Custom-split bookkeeping
+  const customTotal = round2(
+    splitAmong.reduce((sum, id) => sum + (parseFloat(customShares[id]) || 0), 0)
+  )
+  const customRemaining = round2((parsedAmount || 0) - customTotal)
+  const customValid = parsedAmount > 0 && Math.abs(customRemaining) < 0.011 &&
+    splitAmong.every((id) => (parseFloat(customShares[id]) || 0) >= 0)
+
+  const canSubmit =
+    description.trim() &&
+    parsedAmount > 0 &&
+    paidBy &&
+    splitAmong.length > 0 &&
+    (splitMode === 'equal' || customValid) &&
+    !loading
+
+  const buildSplits = () => {
+    if (splitMode === 'equal') {
+      return computeEqualSplits(parsedAmount, splitAmong)
+    }
+    return splitAmong
+      .map((id) => ({ participant_id: id, share_amount: round2(parseFloat(customShares[id]) || 0) }))
+      .filter((s) => s.share_amount > 0)
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -53,10 +102,11 @@ export default function AddExpenseModal({ onClose, expense }) {
     setLoading(true)
     setError(null)
     try {
+      const splits = buildSplits()
       if (isEdit) {
-        await updateExpense(expense.id, trip.id, description.trim(), parsedAmount, paidBy, splitAmong)
+        await updateExpense(expense.id, trip.id, description.trim(), parsedAmount, paidBy, splits, expenseDate)
       } else {
-        await addExpense(trip.id, description.trim(), parsedAmount, paidBy, splitAmong)
+        await addExpense(trip.id, description.trim(), parsedAmount, paidBy, splits, expenseDate)
       }
       onClose()
     } catch (err) {
@@ -85,18 +135,29 @@ export default function AddExpenseModal({ onClose, expense }) {
             />
           </div>
 
-          <div>
-            <label className="label">Amount</label>
-            <input
-              className="input"
-              type="number"
-              inputMode="decimal"
-              step="0.01"
-              min="0"
-              placeholder="0.00"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-            />
+          <div style={{ display: 'flex', gap: 10 }}>
+            <div style={{ flex: 1 }}>
+              <label className="label">Amount</label>
+              <input
+                className="input"
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                min="0"
+                placeholder="0.00"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+              />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label className="label">Date</label>
+              <input
+                className="input"
+                type="date"
+                value={expenseDate}
+                onChange={(e) => setExpenseDate(e.target.value)}
+              />
+            </div>
           </div>
 
           <div>
@@ -135,7 +196,7 @@ export default function AddExpenseModal({ onClose, expense }) {
                 onChange={toggleAll}
                 style={{ width: 18, height: 18, accentColor: 'var(--color-primary)' }}
               />
-              <span style={{ fontSize: 14, fontWeight: 500 }}>Everyone equally</span>
+              <span style={{ fontSize: 14, fontWeight: 500 }}>Everyone</span>
             </label>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {participants.map((p) => {
@@ -163,13 +224,75 @@ export default function AddExpenseModal({ onClose, expense }) {
                 )
               })}
             </div>
-            {parsedAmount > 0 && splitAmong.length > 0 && (
-              <p style={{ fontSize: 13, color: 'var(--color-text-muted)', marginTop: 8 }}>
+          </div>
+
+          <div>
+            <label className="label">How to split</label>
+            <div className="tabs" style={{ marginBottom: 10 }}>
+              <button
+                type="button"
+                className={`tab ${splitMode === 'equal' ? 'active' : ''}`}
+                onClick={() => setSplitMode('equal')}
+              >
+                Equally
+              </button>
+              <button
+                type="button"
+                className={`tab ${splitMode === 'custom' ? 'active' : ''}`}
+                onClick={() => setSplitMode('custom')}
+              >
+                Unequally
+              </button>
+            </div>
+
+            {splitMode === 'equal' && parsedAmount > 0 && splitAmong.length > 0 && (
+              <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
                 {splitAmong.length === 1
                   ? `${participants.find(p => p.id === splitAmong[0])?.name} pays full amount`
-                  : `Split: ${(parsedAmount / splitAmong.length).toFixed(2)} each`
+                  : `Split: ${symbol}${(parsedAmount / splitAmong.length).toFixed(2)} each`
                 }
               </p>
+            )}
+
+            {splitMode === 'custom' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {splitAmong.map((id) => {
+                  const p = participants.find((x) => x.id === id)
+                  if (!p) return null
+                  return (
+                    <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <span style={{ flex: 1, fontSize: 14, fontWeight: 500 }}>
+                        {p.emoji || ''} {p.name}
+                      </span>
+                      <input
+                        className="input"
+                        type="number"
+                        inputMode="decimal"
+                        step="0.01"
+                        min="0"
+                        placeholder="0.00"
+                        value={customShares[id] ?? ''}
+                        onChange={(e) => setShare(id, e.target.value)}
+                        style={{ width: 120, padding: '8px 12px' }}
+                      />
+                    </div>
+                  )
+                })}
+                {parsedAmount > 0 && (
+                  <p style={{
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: customValid ? 'var(--color-success)' : 'var(--color-danger)',
+                  }}>
+                    {customValid
+                      ? `${symbol}${customTotal.toFixed(2)} assigned ✓`
+                      : customRemaining > 0
+                        ? `${symbol}${customRemaining.toFixed(2)} left to assign`
+                        : `${symbol}${Math.abs(customRemaining).toFixed(2)} over the total`
+                    }
+                  </p>
+                )}
+              </div>
             )}
           </div>
 

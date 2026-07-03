@@ -2,11 +2,16 @@
  * Calculate optimized settlements (who pays whom) from expense data.
  * Uses greedy matching of max creditor with max debtor to minimize transactions.
  *
+ * Recorded settlements are folded into the net balances as real transfers
+ * (payer's balance rises, receiver's falls), so balances and suggested
+ * payments stay correct even when new expenses arrive after a settlement.
+ *
  * @param {Array} participants - [{ id, name }]
  * @param {Array} expenses - [{ id, amount, paid_by, splits: [{ participant_id, share_amount }] }]
+ * @param {Array} settlementRecords - [{ from_participant, to_participant, amount }]
  * @returns {{ balances: Object, settlements: Array }}
  */
-export function calculateSettlements(participants, expenses) {
+export function calculateSettlements(participants, expenses, settlementRecords = []) {
   const netBalance = {}
 
   for (const p of participants) {
@@ -19,6 +24,13 @@ export function calculateSettlements(participants, expenses) {
     for (const split of expense.splits) {
       netBalance[split.participant_id] -= Number(split.share_amount)
     }
+  }
+
+  // A recorded settlement is money that actually changed hands
+  for (const rec of settlementRecords) {
+    if (!(rec.from_participant in netBalance) || !(rec.to_participant in netBalance)) continue
+    netBalance[rec.from_participant] += Number(rec.amount)
+    netBalance[rec.to_participant] -= Number(rec.amount)
   }
 
   // Separate into creditors and debtors

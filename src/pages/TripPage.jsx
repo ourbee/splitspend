@@ -16,15 +16,18 @@ export default function TripPage() {
   const { tripId } = useParams()
   const navigate = useNavigate()
   const trip = useTripStore((s) => s.trip)
+  const participants = useTripStore((s) => s.participants)
   const myIdentity = useTripStore((s) => s.myIdentity)
   const loading = useTripStore((s) => s.loading)
   const error = useTripStore((s) => s.error)
   const isCreator = useTripStore((s) => s.isCreator)
+  const switchIdentity = useTripStore((s) => s.switchIdentity)
 
   const [activeTab, setActiveTab] = useState('expenses')
   const [showAddExpense, setShowAddExpense] = useState(false)
   const [editingExpense, setEditingExpense] = useState(null)
-  const [showQR, setShowQR] = useState(false)
+  const [showQRManual, setShowQRManual] = useState(false)
+  const [qrDismissed, setQrDismissed] = useState(false)
   const [showAddParticipant, setShowAddParticipant] = useState(false)
   const [showExport, setShowExport] = useState(false)
   const [showAbout, setShowAbout] = useState(false)
@@ -39,15 +42,6 @@ export default function TripPage() {
       navigate(`/trip/${tripId}/join`, { replace: true })
     }
   }, [loading, trip, myIdentity, tripId, navigate])
-
-  // Show QR on first visit (when coming from trip creation)
-  useEffect(() => {
-    const shown = sessionStorage.getItem(`splitspend_qr_shown_${tripId}`)
-    if (!loading && trip && myIdentity && !shown) {
-      setShowQR(true)
-      sessionStorage.setItem(`splitspend_qr_shown_${tripId}`, '1')
-    }
-  }, [loading, trip, myIdentity, tripId])
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -77,6 +71,17 @@ export default function TripPage() {
   }
 
   const creator = isCreator()
+  const me = participants.find((p) => p.id === myIdentity)
+
+  // Show QR on first visit (when coming from trip creation) — derived, not effect-driven
+  const showQR = showQRManual ||
+    (!!myIdentity && !qrDismissed && !sessionStorage.getItem(`splitspend_qr_shown_${tripId}`))
+
+  const handleCloseQR = () => {
+    sessionStorage.setItem(`splitspend_qr_shown_${tripId}`, '1')
+    setQrDismissed(true)
+    setShowQRManual(false)
+  }
 
   const handleEdit = (expense) => {
     setEditingExpense(expense)
@@ -85,6 +90,16 @@ export default function TripPage() {
   const handleCloseExpenseModal = () => {
     setShowAddExpense(false)
     setEditingExpense(null)
+  }
+
+  const handleSwitchIdentity = async () => {
+    setShowMenu(false)
+    try {
+      await switchIdentity(tripId)
+      navigate(`/trip/${tripId}/join`)
+    } catch {
+      // stay on page; next fetch re-syncs state
+    }
   }
 
   return (
@@ -97,14 +112,19 @@ export default function TripPage() {
         marginBottom: 16,
         padding: '8px 0',
       }}>
-        <div>
+        <div style={{ minWidth: 0 }}>
           <h1 style={{ fontSize: 20, fontWeight: 700 }}>{trip.name}</h1>
+          {me && (
+            <p style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+              You are {me.emoji || ''} {me.name}
+            </p>
+          )}
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <button
             className="btn btn-secondary"
             style={{ width: 'auto', padding: '8px 14px', fontSize: 14 }}
-            onClick={() => setShowQR(true)}
+            onClick={() => setShowQRManual(true)}
           >
             Share
           </button>
@@ -147,6 +167,12 @@ export default function TripPage() {
                     Add Participant
                   </button>
                 )}
+                <button
+                  className="menu-item"
+                  onClick={handleSwitchIdentity}
+                >
+                  Not you? Switch identity
+                </button>
                 <button
                   className="menu-item"
                   onClick={() => { setShowExport(true); setShowMenu(false) }}
@@ -205,7 +231,7 @@ export default function TripPage() {
         />
       )}
       {showQR && (
-        <QRCodeDisplay tripId={tripId} onClose={() => setShowQR(false)} />
+        <QRCodeDisplay tripId={tripId} onClose={handleCloseQR} />
       )}
       {showAddParticipant && (
         <AddParticipantModal onClose={() => setShowAddParticipant(false)} />

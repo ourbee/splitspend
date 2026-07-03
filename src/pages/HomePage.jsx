@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import useTripStore from '../store/tripStore'
 import { isSupabaseConfigured } from '../lib/supabase'
+import { getRecentTrips } from '../lib/recentTrips'
 import CreateTripForm from '../components/CreateTripForm'
 
 export default function HomePage() {
@@ -9,6 +10,7 @@ export default function HomePage() {
   const createTrip = useTripStore((s) => s.createTrip)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [recent] = useState(getRecentTrips)
 
   const handleCreate = async (name, currency, participants, creatorIndex) => {
     setLoading(true)
@@ -58,6 +60,42 @@ export default function HomePage() {
         <p style={{ color: 'var(--color-danger)', textAlign: 'center', marginTop: 16 }}>
           {error}
         </p>
+      )}
+
+      {recent.length > 0 && (
+        <div style={{ marginTop: 32 }}>
+          <p style={{
+            fontSize: 13,
+            fontWeight: 600,
+            color: 'var(--color-text-muted)',
+            marginBottom: 10,
+            textAlign: 'center',
+          }}>
+            Your Splitspends on this device
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {recent.map((t) => (
+              <Link
+                key={t.id}
+                to={`/trip/${t.id}`}
+                className="card"
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '14px 16px',
+                  textDecoration: 'none',
+                  color: 'var(--color-text)',
+                }}
+              >
+                <span style={{ fontWeight: 600, fontSize: 15 }}>{t.name}</span>
+                <span style={{ fontSize: 13, color: 'var(--color-primary)', fontWeight: 600 }}>
+                  Open →
+                </span>
+              </Link>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   )
