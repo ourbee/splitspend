@@ -1,3 +1,8 @@
+/*
+ * Copyright © 2026 Ritwik Balo. All rights reserved.
+ * https://github.com/ourbee
+ */
+
 const STORAGE_KEY = 'splitspend_device_id'
 
 export function getDeviceId() {

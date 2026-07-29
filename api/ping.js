@@ -1,3 +1,8 @@
+/*
+ * Copyright © 2026 Ritwik Balo. All rights reserved.
+ * https://github.com/ourbee
+ */
+
 // Keep-alive endpoint, hit daily by the Vercel cron (see vercel.json).
 // Supabase pauses free-tier projects after ~7 days without API activity,
 // which would make every shared Splitspend link show "Not found".

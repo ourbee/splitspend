@@ -1,3 +1,8 @@
+/*
+ * Copyright © 2026 Ritwik Balo. All rights reserved.
+ * https://github.com/ourbee
+ */
+
 export default function AboutModal({ onClose }) {
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -33,7 +38,18 @@ export default function AboutModal({ onClose }) {
         </div>
 
         <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
-          Created by <span style={{ fontWeight: 600, color: 'var(--color-text)' }}>Ritwik Balo</span>
+          Created by{' '}
+          <a
+            className="credit-link"
+            href="https://github.com/ourbee"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Ritwik Balo
+          </a>
+        </p>
+        <p style={{ fontSize: 12, color: 'var(--color-text-muted)', opacity: 0.8 }}>
+          © 2026 Ritwik Balo. All rights reserved.
         </p>
       </div>
     </div>

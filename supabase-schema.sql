@@ -1,3 +1,6 @@
+-- Copyright © 2026 Ritwik Balo. All rights reserved.
+-- https://github.com/ourbee
+
 -- ============================================================
 -- Splitspend v4 — full schema for a FRESH install
 -- (Existing installs: run supabase-migration-v4.sql then

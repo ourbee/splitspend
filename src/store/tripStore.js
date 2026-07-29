@@ -1,3 +1,8 @@
+/*
+ * Copyright © 2026 Ritwik Balo. All rights reserved.
+ * https://github.com/ourbee
+ */
+
 import { create } from 'zustand'
 import { supabase } from '../lib/supabase'
 import { getDeviceId } from '../lib/deviceId'

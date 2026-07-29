@@ -1,3 +1,8 @@
+/*
+ * Copyright © 2026 Ritwik Balo. All rights reserved.
+ * https://github.com/ourbee
+ */
+
 // Penny-accurate equal split: each share is floor'd to the cent and the
 // remainder goes to the first participant, so shares always sum to the total.
 export function computeEqualSplits(amount, participantIds) {

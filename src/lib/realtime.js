@@ -1,3 +1,8 @@
+/*
+ * Copyright © 2026 Ritwik Balo. All rights reserved.
+ * https://github.com/ourbee
+ */
+
 import { supabase } from './supabase'
 
 // One Broadcast channel per open trip. Clients that write also broadcast a

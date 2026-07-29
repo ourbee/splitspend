@@ -1,3 +1,8 @@
+/*
+ * Copyright © 2026 Ritwik Balo. All rights reserved.
+ * https://github.com/ourbee
+ */
+
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import useTripStore from '../store/tripStore'

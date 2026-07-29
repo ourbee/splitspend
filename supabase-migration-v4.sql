@@ -1,3 +1,6 @@
+-- Copyright © 2026 Ritwik Balo. All rights reserved.
+-- https://github.com/ourbee
+
 -- ============================================================
 -- SplitSpend v3 -> v4 Migration — STEP 1 of 2 (ADDITIVE, SAFE)
 -- Run this in Supabase SQL Editor (Dashboard > SQL Editor > New Query).

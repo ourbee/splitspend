@@ -1,3 +1,8 @@
+/*
+ * Copyright © 2026 Ritwik Balo. All rights reserved.
+ * https://github.com/ourbee
+ */
+
 /**
  * Calculate optimized settlements (who pays whom) from expense data.
  * Uses greedy matching of max creditor with max debtor to minimize transactions.

@@ -1,3 +1,8 @@
+/*
+ * Copyright © 2026 Ritwik Balo. All rights reserved.
+ * https://github.com/ourbee
+ */
+
 import { useState } from 'react'
 import { EMOJI_OPTIONS, getRandomEmoji } from '../lib/emojis'
 import { CURRENCIES } from '../lib/currency'

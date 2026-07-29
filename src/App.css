@@ -1,3 +1,8 @@
+/*
+ * Copyright © 2026 Ritwik Balo. All rights reserved.
+ * https://github.com/ourbee
+ */
+
 :root {
   --color-primary: #6366f1;
   --color-primary-hover: #4f46e5;
@@ -365,4 +370,34 @@ body {
 
 .menu-item + .menu-item {
   border-top: 1px solid var(--color-border);
+}
+
+/* Footer credit — shown on every page. The bottom padding keeps the text
+   clear of the floating "+" button, which is fixed 24px above the viewport
+   bottom and 56px tall. */
+.app-footer {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: var(--space-lg) var(--space-md) 112px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.app-footer-copyright {
+  margin-top: 2px;
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.credit-link {
+  color: var(--color-primary);
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+.credit-link:hover,
+.credit-link:focus-visible {
+  color: var(--color-primary-hover);
+  text-decoration-thickness: 2px;
 }

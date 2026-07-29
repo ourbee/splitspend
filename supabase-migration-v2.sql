@@ -1,3 +1,6 @@
+-- Copyright © 2026 Ritwik Balo. All rights reserved.
+-- https://github.com/ourbee
+
 -- Splitspend v1 -> v2 Migration
 -- Run this in Supabase SQL Editor if you are upgrading from v1.
 -- This preserves all existing data.

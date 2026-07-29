@@ -1,3 +1,8 @@
+/*
+ * Copyright © 2026 Ritwik Balo. All rights reserved.
+ * https://github.com/ourbee
+ */
+
 import { useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { subscribeTripChannel, unsubscribeTripChannel } from '../lib/realtime'

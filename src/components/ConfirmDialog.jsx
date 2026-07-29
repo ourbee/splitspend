@@ -1,3 +1,8 @@
+/*
+ * Copyright © 2026 Ritwik Balo. All rights reserved.
+ * https://github.com/ourbee
+ */
+
 // In-UI confirmation dialog (window.confirm/alert are suppressed in some
 // in-app browsers, which is exactly where Splitspend users live).
 export default function ConfirmDialog({

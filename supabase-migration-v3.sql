@@ -1,3 +1,6 @@
+-- Copyright © 2026 Ritwik Balo. All rights reserved.
+-- https://github.com/ourbee
+
 -- SplitSpend v2 -> v3 Migration
 -- Run this in Supabase SQL Editor (Dashboard > SQL Editor > New Query)
 -- This preserves all existing data. No schema changes needed.

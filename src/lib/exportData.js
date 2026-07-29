@@ -1,3 +1,8 @@
+/*
+ * Copyright © 2026 Ritwik Balo. All rights reserved.
+ * https://github.com/ourbee
+ */
+
 import { calculateSettlements } from './settlement'
 import { currencySymbol } from './currency'
 

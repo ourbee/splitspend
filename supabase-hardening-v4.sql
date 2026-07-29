@@ -1,3 +1,6 @@
+-- Copyright © 2026 Ritwik Balo. All rights reserved.
+-- https://github.com/ourbee
+
 -- ============================================================
 -- SplitSpend v4 Hardening — STEP 2 of 2
 -- Run this ONLY AFTER the v4 frontend is deployed and verified.

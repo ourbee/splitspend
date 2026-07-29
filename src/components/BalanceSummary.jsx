@@ -1,3 +1,8 @@
+/*
+ * Copyright © 2026 Ritwik Balo. All rights reserved.
+ * https://github.com/ourbee
+ */
+
 import useTripStore from '../store/tripStore'
 import { calculateSettlements } from '../lib/settlement'
 import { currencySymbol } from '../lib/currency'
