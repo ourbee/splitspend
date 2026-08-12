@@ -14,12 +14,13 @@ export default function useRealtime(tripId) {
   useEffect(() => {
     if (!tripId || !supabase) return
 
-    subscribeTripChannel(tripId, () => fetchTrip(tripId))
+    // Flagged as realtime so the store can park it while a card is mid-drag.
+    subscribeTripChannel(tripId, () => fetchTrip(tripId, { fromRealtime: true }))
 
     // Broadcast events can be missed while the tab is backgrounded or the
     // connection drops — refetch whenever the tab becomes visible again.
     const onVisible = () => {
-      if (document.visibilityState === 'visible') fetchTrip(tripId)
+      if (document.visibilityState === 'visible') fetchTrip(tripId, { fromRealtime: true })
     }
     document.addEventListener('visibilitychange', onVisible)
 

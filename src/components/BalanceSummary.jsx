@@ -8,7 +8,7 @@ import useTripStore from '../store/tripStore'
 import { calculateSettlements } from '../lib/settlement'
 import { calculatePersonTotals } from '../lib/personTotals'
 import { currencySymbol } from '../lib/currency'
-import { personColor } from '../lib/personColors'
+import { paletteEntry, resolveColorSlots } from '../lib/personColors'
 import { categoryEmoji } from '../lib/categories'
 import { formatDay, dayKey } from '../lib/dates'
 
@@ -35,6 +35,7 @@ export default function BalanceSummary() {
   // with the Settle tab.
   const { balances } = calculateSettlements(participants, expenses, settlementRecords)
   const totals = calculatePersonTotals(participants, expenses)
+  const colorSlots = resolveColorSlots(participants)
 
   const totalSpend = expenses.reduce((sum, e) => sum + Number(e.amount), 0)
 
@@ -55,8 +56,8 @@ export default function BalanceSummary() {
           Tap a name to see their spends.
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {participants.map((p, index) => {
-            const color = personColor(index)
+          {participants.map((p) => {
+            const color = paletteEntry(colorSlots[p.id])
             const t = totals[p.id] || { paid: 0, share: 0, expenses: [] }
             const net = Math.round((balances[p.id] || 0) * 100) / 100
             const pct = totalSpend > 0 ? Math.round((t.paid / totalSpend) * 100) : 0
@@ -146,7 +147,7 @@ export default function BalanceSummary() {
           Net Balances
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {participants.map((p, index) => {
+          {participants.map((p) => {
             const balance = balances[p.id] || 0
             const rounded = Math.round(balance * 100) / 100
             let className = 'amount-neutral'
@@ -162,7 +163,7 @@ export default function BalanceSummary() {
             return (
               <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontWeight: 500, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span className="person-dot" style={{ background: personColor(index).accent }} />
+                  <span className="person-dot" style={{ background: paletteEntry(colorSlots[p.id]).accent }} />
                   {p.emoji || ''} {p.name}
                 </span>
                 <span className={className}>{label}</span>

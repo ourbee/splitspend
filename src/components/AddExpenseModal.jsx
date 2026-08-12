@@ -7,6 +7,9 @@ import { useState } from 'react'
 import useTripStore from '../store/tripStore'
 import { computeEqualSplits, isUnequalSplit, round2 } from '../lib/splits'
 import { currencySymbol } from '../lib/currency'
+import { categoryEmoji } from '../lib/categories'
+import { EXPENSE_EMOJI_GROUPS } from '../lib/expenseEmojis'
+import EmojiPicker from './EmojiPicker'
 
 function todayStr() {
   const d = new Date()
@@ -44,8 +47,17 @@ export default function AddExpenseModal({ onClose, expense }) {
     for (const s of expense.splits) shares[s.participant_id] = String(Number(s.share_amount))
     return shares
   })
+  const [note, setNote] = useState(isEdit ? (expense.note || '') : '')
+  // null means "keep following the description" — that way editing the text of
+  // an expense nobody has re-iconed re-runs the guess, while a hand-picked
+  // emoji is never overwritten.
+  const [emoji, setEmoji] = useState(isEdit ? (expense.emoji || null) : null)
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+
+  const guessedEmoji = categoryEmoji(description)
+  const shownEmoji = emoji || guessedEmoji
 
   const toggleParticipant = (id) => {
     if (splitAmong.includes(id)) {
@@ -109,9 +121,15 @@ export default function AddExpenseModal({ onClose, expense }) {
     try {
       const splits = buildSplits()
       if (isEdit) {
-        await updateExpense(expense.id, trip.id, description.trim(), parsedAmount, paidBy, splits, expenseDate)
+        await updateExpense(
+          expense.id, trip.id, description.trim(), parsedAmount, paidBy, splits,
+          expenseDate, note.trim(), emoji
+        )
       } else {
-        await addExpense(trip.id, description.trim(), parsedAmount, paidBy, splits, expenseDate)
+        await addExpense(
+          trip.id, description.trim(), parsedAmount, paidBy, splits,
+          expenseDate, note.trim(), emoji
+        )
       }
       onClose()
     } catch (err) {
@@ -131,12 +149,35 @@ export default function AddExpenseModal({ onClose, expense }) {
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div>
             <label className="label">Description</label>
-            <input
+            <div className="description-row">
+              <input
+                className="input"
+                placeholder="e.g. Dinner, Taxi, Hotel"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                autoFocus
+              />
+              <button
+                type="button"
+                className="emoji-trigger"
+                onClick={() => setShowEmojiPicker(true)}
+                title={emoji ? 'Change icon' : 'Picked automatically — tap to change'}
+                aria-label="Change expense icon"
+              >
+                {shownEmoji}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="label">Note (optional)</label>
+            <textarea
               className="input"
-              placeholder="e.g. Dinner, Taxi, Hotel"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              autoFocus
+              rows={2}
+              placeholder="Anything worth remembering about this one"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              style={{ resize: 'vertical' }}
             />
           </div>
 
@@ -310,6 +351,19 @@ export default function AddExpenseModal({ onClose, expense }) {
           </button>
         </form>
       </div>
+
+      {showEmojiPicker && (
+        <EmojiPicker
+          title="Pick an icon"
+          groups={EXPENSE_EMOJI_GROUPS}
+          value={emoji}
+          onPick={setEmoji}
+          onPickAuto={() => setEmoji(null)}
+          autoLabel="Automatic"
+          autoPreview={guessedEmoji}
+          onClose={() => setShowEmojiPicker(false)}
+        />
+      )}
     </div>
   )
 }

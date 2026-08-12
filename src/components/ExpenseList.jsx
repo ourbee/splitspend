@@ -5,13 +5,11 @@
 
 import { useMemo, useState } from 'react'
 import useTripStore from '../store/tripStore'
-import ExpenseCard from './ExpenseCard'
 import ConfirmDialog from './ConfirmDialog'
 import ScrollJump from './ScrollJump'
+import DayGroup from './DayGroup'
 import { groupByDay } from '../lib/dates'
 import { categorize } from '../lib/categories'
-import { currencySymbol } from '../lib/currency'
-import { round2 } from '../lib/splits'
 
 // Everything is already in memory, so search is a plain filter — no query,
 // no debounce needed at trip-sized data.
@@ -19,6 +17,7 @@ function matches(expense, query, participants) {
   const payer = participants.find((p) => p.id === expense.paid_by)
   const haystack = [
     expense.description,
+    expense.note,
     payer?.name,
     String(expense.amount),
     categorize(expense.description).key,
@@ -34,7 +33,6 @@ export default function ExpenseList({ onEdit }) {
   const participants = useTripStore((s) => s.participants)
   const trip = useTripStore((s) => s.trip)
   const deleteExpense = useTripStore((s) => s.deleteExpense)
-  const symbol = currencySymbol(trip?.currency)
 
   const [confirmingId, setConfirmingId] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -98,6 +96,7 @@ export default function ExpenseList({ onEdit }) {
       {query && (
         <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: '0 0 10px' }}>
           {filtered.length} of {expenses.length} expense{expenses.length === 1 ? '' : 's'}
+          {' · '}reordering is off while searching
         </p>
       )}
 
@@ -107,25 +106,15 @@ export default function ExpenseList({ onEdit }) {
         </div>
       ) : (
         groups.map((group) => (
-          <div key={group.key} style={{ marginBottom: 18 }}>
-            <div className="day-heading">
-              <span>{group.heading}</span>
-              <span className="day-heading-total">
-                {symbol}{round2(group.total).toLocaleString(undefined, { maximumFractionDigits: 2 })}
-              </span>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {group.expenses.map((expense) => (
-                <ExpenseCard
-                  key={expense.id}
-                  expense={expense}
-                  showDate={false}
-                  onDelete={(id) => { setError(null); setConfirmingId(id) }}
-                  onEdit={onEdit}
-                />
-              ))}
-            </div>
-          </div>
+          <DayGroup
+            key={group.key}
+            group={group}
+            onEdit={onEdit}
+            onDelete={(id) => { setError(null); setConfirmingId(id) }}
+            // A position "between" two cards whose neighbours are filtered out
+            // of view has no meaning, so dragging is off while searching.
+            dragDisabled={!!query}
+          />
         ))
       )}
 

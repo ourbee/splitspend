@@ -6,7 +6,7 @@
 import useTripStore from '../store/tripStore'
 import { currencySymbol } from '../lib/currency'
 import { isUnequalSplit } from '../lib/splits'
-import { personColor } from '../lib/personColors'
+import { paletteEntry, resolveColorSlots } from '../lib/personColors'
 import { categoryEmoji } from '../lib/categories'
 
 function formatDate(dateStr) {
@@ -14,18 +14,19 @@ function formatDate(dateStr) {
   return new Date(dateStr).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
 }
 
-export default function ExpenseCard({ expense, onDelete, onEdit, showDate = true }) {
+export default function ExpenseCard({ expense, onDelete, onEdit, showDate = true, draggable = false }) {
   const participants = useTripStore((s) => s.participants)
   const trip = useTripStore((s) => s.trip)
   const symbol = currencySymbol(trip?.currency)
 
   const getParticipant = (id) => participants.find((p) => p.id === id)
-  const payerIndex = participants.findIndex((p) => p.id === expense.paid_by)
-  const payer = payerIndex >= 0 ? participants[payerIndex] : null
-  const color = personColor(payerIndex)
+  const payer = getParticipant(expense.paid_by)
+  const color = paletteEntry(resolveColorSlots(participants)[expense.paid_by])
   const adder = expense.created_by ? getParticipant(expense.created_by) : null
   const unequal = isUnequalSplit(expense.splits)
-  const icon = categoryEmoji(expense.description)
+  // A hand-picked emoji wins; otherwise the description is re-read every time,
+  // so editing the text updates the icon.
+  const icon = expense.emoji || categoryEmoji(expense.description)
 
   let splitLabel
   if (unequal) {
@@ -59,6 +60,7 @@ export default function ExpenseCard({ expense, onDelete, onEdit, showDate = true
         alignItems: 'flex-start',
         background: color.tint,
         borderLeft: `4px solid ${color.accent}`,
+        cursor: draggable ? 'grab' : undefined,
       }}
     >
       <div style={{ flex: 1, minWidth: 0 }}>
@@ -72,13 +74,21 @@ export default function ExpenseCard({ expense, onDelete, onEdit, showDate = true
         <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 2 }}>
           Split: {splitLabel}
         </div>
+        {expense.note && (
+          <div className="expense-note">{expense.note}</div>
+        )}
         {adder && adder.id !== expense.paid_by && (
           <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2, opacity: 0.8 }}>
             Added by {adder.name}
           </div>
         )}
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+      {/* The drag listeners sit on the whole card, so the buttons swallow the
+          pointer press to stop a long press on them starting a drag. */}
+      <div
+        style={{ display: 'flex', alignItems: 'center', gap: 4 }}
+        onPointerDown={draggable ? (e) => e.stopPropagation() : undefined}
+      >
         <span style={{ fontWeight: 700, fontSize: 16, whiteSpace: 'nowrap' }}>
           {symbol}{Number(expense.amount).toLocaleString()}
         </span>

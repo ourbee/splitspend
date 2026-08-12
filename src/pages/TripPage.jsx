@@ -16,6 +16,8 @@ import AddParticipantModal from '../components/AddParticipantModal'
 import QRCodeDisplay from '../components/QRCodeDisplay'
 import ExportModal from '../components/ExportModal'
 import AboutModal from '../components/AboutModal'
+import IdentitySheet from '../components/IdentitySheet'
+import { paletteEntry, resolveColorSlots } from '../lib/personColors'
 
 export default function TripPage() {
   const { tripId } = useParams()
@@ -41,6 +43,7 @@ export default function TripPage() {
   const [showExport, setShowExport] = useState(false)
   const [showAbout, setShowAbout] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
+  const [showIdentity, setShowIdentity] = useState(false)
 
   useTrip(tripId)
   useRealtime(tripId)
@@ -130,9 +133,17 @@ export default function TripPage() {
         <div style={{ minWidth: 0 }}>
           <h1 style={{ fontSize: 20, fontWeight: 700 }}>{trip.name}</h1>
           {me && (
-            <p style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+            <button
+              className="identity-chip"
+              onClick={() => setShowIdentity(true)}
+              title="Change your colour and emoji"
+            >
+              <span
+                className="person-dot"
+                style={{ background: paletteEntry(resolveColorSlots(participants)[me.id]).accent }}
+              />
               You are {me.emoji || ''} {me.name}
-            </p>
+            </button>
           )}
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -256,6 +267,9 @@ export default function TripPage() {
       )}
       {showAbout && (
         <AboutModal onClose={() => setShowAbout(false)} />
+      )}
+      {showIdentity && (
+        <IdentitySheet onClose={() => setShowIdentity(false)} />
       )}
     </div>
   )

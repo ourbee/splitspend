@@ -3,33 +3,95 @@
  * https://github.com/ourbee
  */
 
-// Soft per-person colours, assigned by position in the participant list
-// (which the server returns ordered by created_at) so everyone in the group
-// sees the same person in the same colour on every device.
+// Soft per-person colours.
 //
-// `tint` is a near-white card fill — the default body text stays well above
-// WCAG AAA contrast on it. `accent` carries the actual identification, as a
-// left stripe on the card and a dot beside the name.
+// A person either has a chosen slot (participants.color) or is assigned one
+// automatically. Assignment is deterministic from the participant list — which
+// the server returns ordered by created_at — so everyone in the group sees the
+// same person in the same colour on every device.
+//
+// `tint` is a near-white card fill; the default body text stays well above
+// WCAG AAA contrast on all of them. `accent` carries the identification, as a
+// left stripe on the card and a dot beside the name. Only these vetted pairs
+// are ever selectable — that is what guarantees legibility, rather than
+// validating a freeform colour picker after the fact.
 const PALETTE = [
-  { accent: '#3b82f6', tint: '#eff6ff' }, // blue
-  { accent: '#22c55e', tint: '#f0fdf4' }, // green
-  { accent: '#8b5cf6', tint: '#f5f3ff' }, // violet
-  { accent: '#f59e0b', tint: '#fffbeb' }, // amber
-  { accent: '#ec4899', tint: '#fdf2f8' }, // pink
-  { accent: '#14b8a6', tint: '#f0fdfa' }, // teal
-  { accent: '#ef4444', tint: '#fef2f2' }, // red
-  { accent: '#84cc16', tint: '#f7fee7' }, // lime
-  { accent: '#06b6d4', tint: '#ecfeff' }, // cyan
-  { accent: '#d946ef', tint: '#fdf4ff' }, // fuchsia
+  { name: 'Blue', accent: '#3b82f6', tint: '#eff6ff' },
+  { name: 'Green', accent: '#22c55e', tint: '#f0fdf4' },
+  { name: 'Violet', accent: '#8b5cf6', tint: '#f5f3ff' },
+  { name: 'Amber', accent: '#f59e0b', tint: '#fffbeb' },
+  { name: 'Pink', accent: '#ec4899', tint: '#fdf2f8' },
+  { name: 'Teal', accent: '#14b8a6', tint: '#f0fdfa' },
+  { name: 'Red', accent: '#ef4444', tint: '#fef2f2' },
+  { name: 'Lime', accent: '#84cc16', tint: '#f7fee7' },
+  { name: 'Cyan', accent: '#06b6d4', tint: '#ecfeff' },
+  { name: 'Fuchsia', accent: '#d946ef', tint: '#fdf4ff' },
+  { name: 'Indigo', accent: '#6366f1', tint: '#eef2ff' },
+  { name: 'Orange', accent: '#f97316', tint: '#fff7ed' },
+  { name: 'Emerald', accent: '#10b981', tint: '#ecfdf5' },
+  { name: 'Rose', accent: '#f43f5e', tint: '#fff1f2' },
+  { name: 'Sky', accent: '#0ea5e9', tint: '#f0f9ff' },
+  { name: 'Purple', accent: '#a855f7', tint: '#faf5ff' },
 ]
 
-const FALLBACK = { accent: 'var(--color-border)', tint: 'var(--color-surface)' }
+const FALLBACK = { name: 'None', accent: 'var(--color-border)', tint: 'var(--color-surface)' }
 
-export function personColor(index) {
-  if (index == null || index < 0) return FALLBACK
-  return PALETTE[index % PALETTE.length]
+export const PALETTE_SIZE = PALETTE.length
+
+export function paletteEntry(slot) {
+  if (slot == null || slot < 0) return FALLBACK
+  return PALETTE[slot % PALETTE.length]
 }
 
-export function personColorById(participants, id) {
-  return personColor(participants.findIndex((p) => p.id === id))
+export function paletteSwatches() {
+  return PALETTE.map((c, slot) => ({ slot, ...c }))
+}
+
+/**
+ * Work out every person's palette slot in one pass.
+ *
+ * Chosen slots are honoured first; everyone else takes the lowest slot no one
+ * else holds, in list order. That keeps automatic colours stable and stops an
+ * auto-assigned person from silently sharing a colour with someone who picked
+ * it deliberately.
+ *
+ * @param {Array} participants - [{ id, color }]
+ * @returns {Object} { [participantId]: slot }
+ */
+export function resolveColorSlots(participants = []) {
+  const slots = {}
+  const taken = new Set()
+
+  for (const p of participants) {
+    if (p.color != null && p.color >= 0) {
+      const slot = Number(p.color) % PALETTE.length
+      slots[p.id] = slot
+      taken.add(slot)
+    }
+  }
+
+  let next = 0
+  for (const p of participants) {
+    if (slots[p.id] != null) continue
+    // Groups bigger than the palette wrap around and start sharing again,
+    // which is what already happens today.
+    while (taken.has(next) && taken.size < PALETTE.length) next++
+    const slot = next % PALETTE.length
+    slots[p.id] = slot
+    taken.add(slot)
+    next++
+  }
+
+  return slots
+}
+
+/** Slots already spoken for by someone other than `participantId`. */
+export function takenSlots(participants = [], participantId = null) {
+  const slots = resolveColorSlots(participants)
+  return new Set(
+    participants
+      .filter((p) => p.id !== participantId)
+      .map((p) => slots[p.id])
+      .filter((s) => s != null)
+  )
 }

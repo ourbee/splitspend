@@ -38,7 +38,11 @@ accounts, no logins, no app install.
   across descriptions, people, amounts and categories
 - Per-person breakdown in Balances — **paid** vs **share** vs net, with each
   person's own spends one tap away
-- Soft per-person colour coding and auto-guessed category icons
+- Notes on any expense
+- Soft per-person colour coding — automatic, or pick your own colour and
+  emoji from "You are …"
+- Category icons guessed from the description, overridable per expense
+- **Long-press to drag** an expense into place within its day
 - Emoji avatars, QR-code sharing, multi-currency
 - Works entirely in the browser — mobile-first UI
 
@@ -60,9 +64,14 @@ npm run dev
 ```
 
 Database setup: run `supabase-schema.sql` in the Supabase SQL editor, then
-section 3 of `supabase-migration-v4.sql` (the RPC definitions). Upgrading
-an existing v2/v3 install: run `supabase-migration-v4.sql` then
-`supabase-hardening-v4.sql`.
+section 3 of `supabase-migration-v4.sql` (the RPC definitions), then
+`supabase-migration-v5.sql`. Upgrading an existing v2/v3 install: run
+`supabase-migration-v4.sql`, `supabase-hardening-v4.sql`, then
+`supabase-migration-v5.sql`.
+
+`supabase-migration-v5.sql` is additive — it adds columns and `*_v5`
+functions but leaves every v4 RPC untouched, so **run it before deploying
+the v5 frontend**. The v4.1 bundle keeps working while it is in place.
 
 ## Version history
 
@@ -75,5 +84,8 @@ an existing v2/v3 install: run `supabase-migration-v4.sql` then
 - **v4.1** — day-grouped expense list with day totals, expense search,
   per-person spend breakdown, per-person colours, category icons, and the
   share sheet now only appears right after a group is created
+- **v5** — notes on expenses, pick-your-own person colour and emoji,
+  overridable per-expense icons, and long-press drag to arrange a day's
+  expenses by hand
 
 Created by **Ritwik Balo**.

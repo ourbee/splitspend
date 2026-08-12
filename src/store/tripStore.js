@@ -8,6 +8,7 @@ import { supabase } from '../lib/supabase'
 import { getDeviceId } from '../lib/deviceId'
 import { broadcastRefresh } from '../lib/realtime'
 import { rememberTrip } from '../lib/recentTrips'
+import { sortExpenses } from '../lib/expenseOrder'
 
 // All reads and writes go through SECURITY DEFINER RPCs keyed by the trip
 // UUID — the anon key has no direct table access (see supabase-schema.sql).
@@ -22,10 +23,29 @@ const useTripStore = create((set, get) => ({
   myIdentity: null,
   loading: true,
   error: null,
+  // While a card is being dragged, incoming realtime refreshes are parked —
+  // swapping the whole expense array mid-drag yanks the card out from under
+  // the user's thumb. The parked refresh runs on drop.
+  reordering: false,
+  pendingRefresh: false,
 
-  fetchTrip: async (tripId) => {
+  setReordering: (active) => {
+    if (active) {
+      set({ reordering: true })
+      return
+    }
+    const { pendingRefresh, trip } = get()
+    set({ reordering: false, pendingRefresh: false })
+    if (pendingRefresh && trip) get().fetchTrip(trip.id)
+  },
+
+  fetchTrip: async (tripId, { fromRealtime = false } = {}) => {
     if (!supabase) {
       set({ error: 'Supabase not configured', loading: false })
+      return
+    }
+    if (fromRealtime && get().reordering) {
+      set({ pendingRefresh: true })
       return
     }
     // Only show the full-page spinner on first load, not on realtime refreshes
@@ -63,7 +83,7 @@ const useTripStore = create((set, get) => ({
       set({
         trip: data.trip,
         participants,
-        expenses: data.expenses || [],
+        expenses: sortExpenses(data.expenses || []),
         settlementRecords: data.settlement_records || [],
         myIdentity,
         loading: false,
@@ -93,10 +113,10 @@ const useTripStore = create((set, get) => ({
     return tripId
   },
 
-  addExpense: async (tripId, description, amount, paidBy, splits, expenseDate) => {
+  addExpense: async (tripId, description, amount, paidBy, splits, expenseDate, note, emoji) => {
     if (!supabase) throw new Error('Supabase not configured')
 
-    const { error } = await supabase.rpc('add_expense_v4', {
+    const { error } = await supabase.rpc('add_expense_v5', {
       p_trip_id: tripId,
       p_description: description,
       p_amount: amount,
@@ -104,6 +124,8 @@ const useTripStore = create((set, get) => ({
       p_splits: splits,
       p_created_by: get().myIdentity,
       p_expense_date: expenseDate || null,
+      p_note: note || null,
+      p_emoji: emoji || null,
     })
     if (error) throw error
 
@@ -111,10 +133,10 @@ const useTripStore = create((set, get) => ({
     await get().fetchTrip(tripId)
   },
 
-  updateExpense: async (expenseId, tripId, description, amount, paidBy, splits, expenseDate) => {
+  updateExpense: async (expenseId, tripId, description, amount, paidBy, splits, expenseDate, note, emoji) => {
     if (!supabase) throw new Error('Supabase not configured')
 
-    const { error } = await supabase.rpc('update_expense_v4', {
+    const { error } = await supabase.rpc('update_expense_v5', {
       p_trip_id: tripId,
       p_expense_id: expenseId,
       p_description: description,
@@ -122,8 +144,37 @@ const useTripStore = create((set, get) => ({
       p_paid_by: paidBy,
       p_splits: splits,
       p_expense_date: expenseDate || null,
+      p_note: note || null,
+      p_emoji: emoji || null,
     })
     if (error) throw error
+
+    broadcastRefresh(tripId)
+    await get().fetchTrip(tripId)
+  },
+
+  // Applied locally first so the card stays where it was dropped; the server
+  // rebalances the day's spacing if the midpoints ever get too tight, and the
+  // refetch picks that up.
+  reorderExpense: async (tripId, expenseId, sortOrder) => {
+    if (!supabase) throw new Error('Supabase not configured')
+
+    const previous = get().expenses
+    set({
+      expenses: sortExpenses(
+        previous.map((e) => (e.id === expenseId ? { ...e, sort_order: sortOrder } : e))
+      ),
+    })
+
+    const { error } = await supabase.rpc('reorder_expense_v5', {
+      p_trip_id: tripId,
+      p_expense_id: expenseId,
+      p_sort_order: sortOrder,
+    })
+    if (error) {
+      set({ expenses: previous })
+      throw error
+    }
 
     broadcastRefresh(tripId)
     await get().fetchTrip(tripId)
@@ -247,6 +298,33 @@ const useTripStore = create((set, get) => ({
     broadcastRefresh(tripId)
   },
 
+  // Colours are unique per group, enforced by a unique index. Two devices
+  // picking the same swatch at once means one of them loses — same shape as
+  // claimIdentity's TAKEN race.
+  updateParticipantColor: async (tripId, participantId, slot) => {
+    if (!supabase) throw new Error('Supabase not configured')
+
+    const { data, error } = await supabase.rpc('update_participant_color_v5', {
+      p_trip_id: tripId,
+      p_participant_id: participantId,
+      p_color: slot,
+    })
+    if (error) throw error
+    if (!data?.ok) {
+      const err = new Error('That colour was just taken by someone else')
+      err.code = 'TAKEN'
+      await get().fetchTrip(tripId)
+      throw err
+    }
+
+    set((state) => ({
+      participants: state.participants.map((p) =>
+        p.id === participantId ? { ...p, color: slot } : p
+      ),
+    }))
+    broadcastRefresh(tripId)
+  },
+
   isCreator: () => {
     const { trip, myIdentity } = get()
     return trip?.creator_id === myIdentity
@@ -261,6 +339,8 @@ const useTripStore = create((set, get) => ({
       myIdentity: null,
       loading: true,
       error: null,
+      reordering: false,
+      pendingRefresh: false,
     })
   },
 }))
