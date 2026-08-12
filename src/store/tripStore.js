@@ -9,6 +9,7 @@ import { getDeviceId } from '../lib/deviceId'
 import { broadcastRefresh } from '../lib/realtime'
 import { rememberTrip } from '../lib/recentTrips'
 import { sortExpenses } from '../lib/expenseOrder'
+import { sortParticipants } from '../lib/personColors'
 
 // All reads and writes go through SECURITY DEFINER RPCs keyed by the trip
 // UUID — the anon key has no direct table access (see supabase-schema.sql).
@@ -60,7 +61,9 @@ const useTripStore = create((set, get) => ({
       if (error) throw error
       if (!data) throw new Error('Not found')
 
-      const participants = data.participants || []
+      // Pinned client-side: the server's ORDER BY is a tie for every group,
+      // and unstable order means unstable automatic colours.
+      const participants = sortParticipants(data.participants || [])
 
       // Identity: the server's device match is authoritative; localStorage
       // is the fast path when it survives.

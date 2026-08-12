@@ -38,6 +38,25 @@ const FALLBACK = { name: 'None', accent: 'var(--color-border)', tint: 'var(--col
 
 export const PALETTE_SIZE = PALETTE.length
 
+/**
+ * Deterministic participant order.
+ *
+ * create_trip_v4 inserts a group's participants inside one transaction, so
+ * `now()` stamps every one of them with an identical created_at. Ordering by
+ * created_at alone is therefore a total tie, and the database is free to hand
+ * them back in a different order from one query plan to the next — which
+ * silently reshuffles every automatically assigned colour. Sorting by id as
+ * the tiebreak pins the order for good, whatever the server returns.
+ */
+export function sortParticipants(participants = []) {
+  return [...participants].sort((a, b) => {
+    const at = String(a.created_at || '')
+    const bt = String(b.created_at || '')
+    if (at !== bt) return at < bt ? -1 : 1
+    return String(a.id).localeCompare(String(b.id))
+  })
+}
+
 export function paletteEntry(slot) {
   if (slot == null || slot < 0) return FALLBACK
   return PALETTE[slot % PALETTE.length]

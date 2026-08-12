@@ -98,7 +98,11 @@ BEGIN
     'created_at', p.created_at,
     'claimed', EXISTS (SELECT 1 FROM participant_devices d WHERE d.participant_id = p.id),
     'is_me', EXISTS (SELECT 1 FROM participant_devices d WHERE d.participant_id = p.id AND d.device_id = p_device_id)
-  ) ORDER BY p.created_at), '[]'::jsonb)
+  -- create_trip_v4 inserts a group's participants in one transaction, so they
+  -- all share a created_at. Ordering by it alone is a total tie and the plan
+  -- is free to return them in any order — which reshuffles every automatic
+  -- colour. p.id pins it.
+  ) ORDER BY p.created_at, p.id), '[]'::jsonb)
   INTO v_participants
   FROM participants p WHERE p.trip_id = p_trip_id;
 
