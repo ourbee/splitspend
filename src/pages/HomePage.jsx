@@ -22,7 +22,9 @@ export default function HomePage() {
     setError(null)
     try {
       const tripId = await createTrip(name, currency, participants, creatorIndex)
-      navigate(`/trip/${tripId}`)
+      // `justCreated` is what makes the share sheet appear — only right after
+      // creation, never on an ordinary visit to the link.
+      navigate(`/trip/${tripId}`, { state: { justCreated: true } })
     } catch (err) {
       setError(err.message)
       setLoading(false)

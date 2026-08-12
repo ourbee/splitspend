@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import useTripStore from '../store/tripStore'
 import useTrip from '../hooks/useTrip'
 import useRealtime from '../hooks/useRealtime'
@@ -20,6 +20,7 @@ import AboutModal from '../components/AboutModal'
 export default function TripPage() {
   const { tripId } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const trip = useTripStore((s) => s.trip)
   const participants = useTripStore((s) => s.participants)
   const myIdentity = useTripStore((s) => s.myIdentity)
@@ -32,7 +33,10 @@ export default function TripPage() {
   const [showAddExpense, setShowAddExpense] = useState(false)
   const [editingExpense, setEditingExpense] = useState(null)
   const [showQRManual, setShowQRManual] = useState(false)
-  const [qrDismissed, setQrDismissed] = useState(false)
+  // Auto-open the share sheet only for the person who just created this
+  // Splitspend. Everyone else — and the creator on every later visit — gets
+  // it from the Share button.
+  const [showQRAuto, setShowQRAuto] = useState(() => !!location.state?.justCreated)
   const [showAddParticipant, setShowAddParticipant] = useState(false)
   const [showExport, setShowExport] = useState(false)
   const [showAbout, setShowAbout] = useState(false)
@@ -40,6 +44,15 @@ export default function TripPage() {
 
   useTrip(tripId)
   useRealtime(tripId)
+
+  // Drop the flag from history straight away, so reloading the page (which
+  // restores history state) doesn't bring the share sheet back.
+  useEffect(() => {
+    if (location.state?.justCreated) {
+      navigate(location.pathname, { replace: true, state: null })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Redirect to join page if no identity set
   useEffect(() => {
@@ -78,13 +91,10 @@ export default function TripPage() {
   const creator = isCreator()
   const me = participants.find((p) => p.id === myIdentity)
 
-  // Show QR on first visit (when coming from trip creation) — derived, not effect-driven
-  const showQR = showQRManual ||
-    (!!myIdentity && !qrDismissed && !sessionStorage.getItem(`splitspend_qr_shown_${tripId}`))
+  const showQR = showQRManual || (showQRAuto && !!myIdentity)
 
   const handleCloseQR = () => {
-    sessionStorage.setItem(`splitspend_qr_shown_${tripId}`, '1')
-    setQrDismissed(true)
+    setShowQRAuto(false)
     setShowQRManual(false)
   }
 

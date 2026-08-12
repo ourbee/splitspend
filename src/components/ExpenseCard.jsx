@@ -6,21 +6,26 @@
 import useTripStore from '../store/tripStore'
 import { currencySymbol } from '../lib/currency'
 import { isUnequalSplit } from '../lib/splits'
+import { personColor } from '../lib/personColors'
+import { categoryEmoji } from '../lib/categories'
 
 function formatDate(dateStr) {
   if (!dateStr) return ''
   return new Date(dateStr).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
 }
 
-export default function ExpenseCard({ expense, onDelete, onEdit }) {
+export default function ExpenseCard({ expense, onDelete, onEdit, showDate = true }) {
   const participants = useTripStore((s) => s.participants)
   const trip = useTripStore((s) => s.trip)
   const symbol = currencySymbol(trip?.currency)
 
   const getParticipant = (id) => participants.find((p) => p.id === id)
-  const payer = getParticipant(expense.paid_by)
+  const payerIndex = participants.findIndex((p) => p.id === expense.paid_by)
+  const payer = payerIndex >= 0 ? participants[payerIndex] : null
+  const color = personColor(payerIndex)
   const adder = expense.created_by ? getParticipant(expense.created_by) : null
   const unequal = isUnequalSplit(expense.splits)
+  const icon = categoryEmoji(expense.description)
 
   let splitLabel
   if (unequal) {
@@ -43,12 +48,22 @@ export default function ExpenseCard({ expense, onDelete, onEdit }) {
       : splitNames.join(', ')
   }
 
-  const dateLabel = formatDate(expense.expense_date || expense.created_at)
+  const dateLabel = showDate ? formatDate(expense.expense_date || expense.created_at) : ''
 
   return (
-    <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+    <div
+      className="card"
+      style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        background: color.tint,
+        borderLeft: `4px solid ${color.accent}`,
+      }}
+    >
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 2 }}>
+          <span style={{ marginRight: 6 }} aria-hidden="true">{icon}</span>
           {expense.description}
         </div>
         <div style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>

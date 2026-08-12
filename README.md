@@ -34,6 +34,11 @@ accounts, no logins, no app install.
   settlement recording with undo, and balances that always account for
   payments already made
 - Expense editing, custom expense dates, and "added by" attribution
+- Expenses grouped by day with per-day totals, newest first, and search
+  across descriptions, people, amounts and categories
+- Per-person breakdown in Balances — **paid** vs **share** vs net, with each
+  person's own spends one tap away
+- Soft per-person colour coding and auto-guessed category icons
 - Emoji avatars, QR-code sharing, multi-currency
 - Works entirely in the browser — mobile-first UI
 
@@ -67,5 +72,8 @@ an existing v2/v3 install: run `supabase-migration-v4.sql` then
 - **v4** — welcome-back identity flow with multi-device support, unequal
   splits, corrected settlement math, RPC-hardened database, expense dates
   and attribution, in-app confirmations, link previews, keep-alive cron
+- **v4.1** — day-grouped expense list with day totals, expense search,
+  per-person spend breakdown, per-person colours, category icons, and the
+  share sheet now only appears right after a group is created
 
 Created by **Ritwik Balo**.
