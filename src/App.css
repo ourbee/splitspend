@@ -650,6 +650,382 @@ body {
   margin: 0;
 }
 
+/* Camera vs gallery chooser. Anchored to the right so it never runs off the
+   edge of a narrow phone, and pinned above the field hint below it. */
+.scan-choice {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 20;
+  min-width: 168px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-modal);
+  overflow: hidden;
+}
+
+.field-hint {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin-top: 6px;
+  line-height: 1.4;
+}
+
+/* Bill line items — a record of what was on the receipt, never an input to
+   the split maths. */
+.line-items {
+  margin-top: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  overflow: hidden;
+}
+
+.line-items-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-align: left;
+  cursor: pointer;
+}
+
+.line-items-sum {
+  margin-left: auto;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+/* A wide receipt scrolls inside its own box rather than stretching the card. */
+.line-items-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.line-items-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.line-items-table th,
+.line-items-table td {
+  padding: 4px 8px;
+  border-top: 1px solid var(--color-border);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.line-items-table th {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+.line-items-table .num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.line-input {
+  width: 100%;
+  min-width: 90px;
+  padding: 4px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--color-text);
+  background: var(--color-surface);
+}
+
+.line-input-sm {
+  min-width: 62px;
+  text-align: right;
+}
+
+.line-items-foot {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-top: 2px solid var(--color-border);
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.line-items-hint {
+  padding: 0 10px 10px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+}
+
+/* ---------------------------------------------------------------
+   Reports
+   --------------------------------------------------------------- */
+.card-heading {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: var(--color-text-muted);
+}
+
+.donut-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.donut {
+  width: 100%;
+  max-width: 320px;
+  margin: 0 auto;
+  display: block;
+  overflow: visible;
+}
+
+.donut-slice {
+  transition: transform 0.18s ease-out;
+}
+
+.donut-slice path {
+  cursor: pointer;
+  outline: none;
+}
+
+.donut-slice path:focus-visible {
+  stroke: var(--color-text);
+  stroke-width: 2.5;
+}
+
+/* Labels and figures wear text ink, never the series colour. */
+.donut-direct-label {
+  font-size: 11px;
+  font-weight: 600;
+  fill: var(--color-text-muted);
+}
+
+.donut-centre-top {
+  font-size: 12px;
+  fill: var(--color-text-muted);
+}
+
+.donut-centre-value {
+  font-size: 21px;
+  font-weight: 700;
+  fill: var(--color-text);
+}
+
+.donut-centre-sub {
+  font-size: 11px;
+  fill: var(--color-text-muted);
+}
+
+.donut-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.donut-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--color-text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.donut-legend-item.is-selected,
+.donut-legend-item:hover {
+  background: var(--color-bg);
+}
+
+.donut-legend-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.donut-legend-value {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.donut-legend-folded {
+  color: var(--color-text-muted);
+  font-size: 11.5px;
+}
+
+.donut-swatch {
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+.report-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.report-group {
+  padding: 10px 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.report-group:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+.report-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+.report-group-total {
+  margin-left: auto;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.report-sub-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0 3px 18px;
+  font-size: 12.5px;
+}
+
+.report-sub-name {
+  flex-shrink: 0;
+  min-width: 96px;
+  color: var(--color-text-muted);
+}
+
+.report-bar {
+  flex: 1;
+  min-width: 24px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--color-border);
+  overflow: hidden;
+}
+
+.report-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-full);
+}
+
+.report-sub-value {
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.report-sub-count {
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+.report-fix-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--color-text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.report-fix-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.report-fix-tag {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.report-picker {
+  padding: 10px 8px;
+  margin-top: 4px;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+}
+
+.report-picker-group + .report-picker-group {
+  margin-top: 10px;
+}
+
+.report-picker-head {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+  margin-bottom: 4px;
+}
+
+.report-picker-subs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.report-picker-chip {
+  padding: 4px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.report-picker-chip:hover {
+  border-color: var(--color-primary);
+}
+
 /* Trip diary preview — full-screen, with the page itself in an iframe */
 .diary-overlay {
   position: fixed;

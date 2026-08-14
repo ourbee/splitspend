@@ -10,7 +10,10 @@ import { currencySymbol } from '../lib/currency'
 import { categoryEmoji } from '../lib/categories'
 import { EXPENSE_EMOJI_GROUPS } from '../lib/expenseEmojis'
 import { scanReceipt } from '../lib/receiptScan'
+import { normaliseLineItems } from '../lib/lineItems'
+import { guessLabelStrings } from '../lib/categories'
 import EmojiPicker from './EmojiPicker'
+import LineItemsTable from './LineItemsTable'
 
 function todayStr() {
   const d = new Date()
@@ -68,6 +71,11 @@ export default function AddExpenseModal({ onClose, expense }) {
     return shares
   })
   const [note, setNote] = useState(isEdit ? (expense.note || '') : '')
+  // Rows read off a photographed bill. A record only — they are stored beside
+  // the expense and never consulted when working out who owes what.
+  const [lineItems, setLineItems] = useState(
+    isEdit && !expense._type ? (expense.line_items || []) : []
+  )
   // null means "keep following the description" — that way editing the text of
   // an expense nobody has re-iconed re-runs the guess, while a hand-picked
   // emoji is never overwritten.
@@ -77,7 +85,14 @@ export default function AddExpenseModal({ onClose, expense }) {
   const [error, setError] = useState(null)
   const [scanning, setScanning] = useState(false)
   const [scanError, setScanError] = useState(null)
-  const fileInputRef = useRef(null)
+  const [showScanChoice, setShowScanChoice] = useState(false)
+  // Two inputs, not one. A bare accept="image/*" is rendered by iOS as a
+  // three-way sheet, but a lot of Android OEM pickers turn it into a
+  // gallery-only browser with no way to reach the camera. Adding capture to
+  // that single input would fix Android by breaking both platforms' gallery
+  // path, so each source gets its own input and the app asks which one.
+  const cameraInputRef = useRef(null)
+  const galleryInputRef = useRef(null)
 
   const guessedEmoji = isEvent ? '📍' : categoryEmoji(description)
   const shownEmoji = emoji || guessedEmoji
@@ -153,13 +168,37 @@ export default function AddExpenseModal({ onClose, expense }) {
       }
       if (result.amount > 0 && !amount) setAmount(String(result.amount))
       if (result.merchant && !description.trim()) setDescription(result.merchant)
-      if (!result.summary && !result.text && !(result.amount > 0)) {
+      // A second scan replaces the rows rather than appending: two photos of
+      // the same bill would otherwise silently double the table.
+      if (result.items.length) setLineItems(result.items)
+      if (!result.summary && !result.text && !result.items.length && !(result.amount > 0)) {
         setScanError('Could not read anything useful from that photo.')
       }
     } catch (err) {
       setScanError(err.message)
     }
     setScanning(false)
+  }
+
+  // Labels for the Reports tab, decided here so the common case never touches
+  // the network. The keyword matcher is authoritative when it hits; when it
+  // misses, both columns stay NULL, and NULL is precisely the signal the
+  // Reports tab uses to decide what is worth asking Gemini about. Storing
+  // "Other/Miscellaneous" instead would make a genuine Other indistinguishable
+  // from a description nobody has looked at yet.
+  //
+  // On an edit, a description that hasn't changed keeps whatever labels it
+  // already had — otherwise correcting a typo in the amount would silently
+  // undo a hand-picked category.
+  const resolveLabels = () => {
+    const text = description.trim()
+    if (isEdit && !expense._type && text === (expense.description || '').trim()) {
+      return { category: expense.category ?? null, subcategory: expense.subcategory ?? null }
+    }
+    const guess = guessLabelStrings(text)
+    return guess.matched
+      ? { category: guess.category, subcategory: guess.subcategory }
+      : { category: null, subcategory: null }
   }
 
   const handleSubmit = async (e) => {
@@ -177,15 +216,19 @@ export default function AddExpenseModal({ onClose, expense }) {
         }
       } else {
         const splits = buildSplits()
+        const extras = {
+          lineItems: normaliseLineItems(lineItems),
+          ...resolveLabels(),
+        }
         if (isEdit) {
           await updateExpense(
             expense.id, trip.id, description.trim(), parsedAmount, paidBy, splits,
-            expenseDate, note.trim(), emoji
+            expenseDate, note.trim(), emoji, extras
           )
         } else {
           await addExpense(
             trip.id, description.trim(), parsedAmount, paidBy, splits,
-            expenseDate, note.trim(), emoji
+            expenseDate, note.trim(), emoji, extras
           )
         }
       }
@@ -264,26 +307,64 @@ export default function AddExpenseModal({ onClose, expense }) {
                 style={{ resize: 'vertical' }}
               />
               {!isEvent && (
-                <button
-                  type="button"
-                  className="scan-trigger"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={scanning}
-                  title="Scan a bill — the text is saved, the photo is not"
-                  aria-label="Scan a bill with the camera or from the gallery"
-                >
-                  {scanning ? <span className="spinner spinner-inline" /> : '📷'}
-                </button>
+                <div style={{ position: 'relative' }}>
+                  <button
+                    type="button"
+                    className="scan-trigger"
+                    onClick={() => setShowScanChoice((v) => !v)}
+                    disabled={scanning}
+                    title="Scan a bill — the text is saved, the photo is not"
+                    aria-label="Scan a bill with the camera or from the gallery"
+                    aria-expanded={showScanChoice}
+                  >
+                    {scanning ? <span className="spinner spinner-inline" /> : '📷'}
+                  </button>
+                  {showScanChoice && (
+                    <div className="scan-choice">
+                      <button
+                        type="button"
+                        className="menu-item"
+                        onClick={() => { setShowScanChoice(false); cameraInputRef.current?.click() }}
+                      >
+                        📸 Take photo
+                      </button>
+                      <button
+                        type="button"
+                        className="menu-item"
+                        onClick={() => { setShowScanChoice(false); galleryInputRef.current?.click() }}
+                      >
+                        🖼️ Choose photo
+                      </button>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
             {!isEvent && (
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                style={{ display: 'none' }}
-                onChange={handleScanFile}
-              />
+              <>
+                {/* capture asks the OS for the camera directly, which is the
+                    only reliable way to reach it on Android. */}
+                <input
+                  ref={cameraInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  style={{ display: 'none' }}
+                  onChange={handleScanFile}
+                />
+                <input
+                  ref={galleryInputRef}
+                  type="file"
+                  accept="image/*"
+                  style={{ display: 'none' }}
+                  onChange={handleScanFile}
+                />
+              </>
+            )}
+            {!isEvent && !scanning && !scanError && (
+              <p className="field-hint">
+                📷 Snap a bill or invoice and the items, prices and total are read in for you.
+              </p>
             )}
             {scanning && (
               <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>
@@ -292,6 +373,16 @@ export default function AddExpenseModal({ onClose, expense }) {
             )}
             {scanError && (
               <p style={{ fontSize: 12, color: 'var(--color-danger)', marginTop: 4 }}>{scanError}</p>
+            )}
+            {!isEvent && lineItems.length > 0 && (
+              <LineItemsTable
+                items={lineItems}
+                symbol={symbol}
+                amount={parsedAmount}
+                editable
+                defaultOpen
+                onChange={setLineItems}
+              />
             )}
           </div>
 

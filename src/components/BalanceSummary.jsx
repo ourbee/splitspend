@@ -11,6 +11,7 @@ import { currencySymbol } from '../lib/currency'
 import { paletteEntry, resolveColorSlots } from '../lib/personColors'
 import { categoryEmoji } from '../lib/categories'
 import { formatDay, dayKey } from '../lib/dates'
+import SettlementList from './SettlementList'
 
 const money = (n) => Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 })
 
@@ -142,41 +143,12 @@ export default function BalanceSummary() {
         </div>
       </div>
 
-      <div className="card">
-        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: 'var(--color-text-muted)' }}>
-          Net Balances
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {participants.map((p) => {
-            const balance = balances[p.id] || 0
-            const rounded = Math.round(balance * 100) / 100
-            let className = 'amount-neutral'
-            let label = 'settled'
-            if (rounded > 0.01) {
-              className = 'amount-positive'
-              label = `gets back ${symbol}${rounded.toLocaleString()}`
-            } else if (rounded < -0.01) {
-              className = 'amount-negative'
-              label = `owes ${symbol}${Math.abs(rounded).toLocaleString()}`
-            }
-
-            return (
-              <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontWeight: 500, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span className="person-dot" style={{ background: paletteEntry(colorSlots[p.id]).accent }} />
-                  {p.emoji || ''} {p.name}
-                </span>
-                <span className={className}>{label}</span>
-              </div>
-            )
-          })}
-        </div>
-        {settlementRecords.length > 0 && (
-          <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 12 }}>
-            Includes {settlementRecords.length} recorded settlement{settlementRecords.length > 1 ? 's' : ''}
-          </p>
-        )}
-      </div>
+      {/* What used to be a separate Settle tab. The "Net Balances" card that
+          stood here was a straight duplicate — "Who Spent What" above already
+          shows each person's net — so the settling itself took its place, and
+          the tab now reads as one story: the total, then each person, then who
+          pays whom. */}
+      <SettlementList />
     </div>
   )
 }

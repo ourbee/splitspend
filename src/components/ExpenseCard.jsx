@@ -8,6 +8,7 @@ import { currencySymbol } from '../lib/currency'
 import { isUnequalSplit } from '../lib/splits'
 import { paletteEntry, resolveColorSlots } from '../lib/personColors'
 import { categoryEmoji } from '../lib/categories'
+import LineItemsTable from './LineItemsTable'
 
 function formatDate(dateStr) {
   if (!dateStr) return ''
@@ -76,6 +77,19 @@ export default function ExpenseCard({ expense, onDelete, onEdit, showDate = true
         </div>
         {expense.note && (
           <div className="expense-note">{expense.note}</div>
+        )}
+        {/* Collapsed by default — a twenty-line grocery receipt would
+            otherwise bury the card it belongs to. The pointer press is
+            swallowed so opening the table on a draggable card doesn't
+            start a drag instead. */}
+        {expense.line_items?.length > 0 && (
+          <div onPointerDown={draggable ? (e) => e.stopPropagation() : undefined}>
+            <LineItemsTable
+              items={expense.line_items}
+              symbol={symbol}
+              amount={expense.amount}
+            />
+          </div>
         )}
         {adder && adder.id !== expense.paid_by && (
           <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2, opacity: 0.8 }}>

@@ -16,6 +16,9 @@ import { categoryEmoji } from './categories'
 import { groupByDay, formatDay } from './dates'
 import { sortExpenses } from './expenseOrder'
 import { round2 } from './splits'
+import { buildReport } from './reportData'
+import { renderDonutSvg } from './donutSvg'
+import { percentLabel } from './donutGeometry'
 
 const esc = (s) =>
   String(s ?? '')
@@ -56,6 +59,23 @@ export function buildDiaryHtml(trip, participants, expenses, events, settlementR
       const shares = (item.splits || [])
         .map((s) => `${esc(name(s.participant_id))} ${money(symbol, s.share_amount)}`)
         .join(' · ')
+
+      // What was actually on the bill, printed under the expense it belongs
+      // to. Read-only here — a diary is a record of what happened.
+      const billRows = (item.line_items || []).map((li) => `
+        <tr>
+          <td>${esc(li.name)}</td>
+          <td class="num">${esc(li.qty ?? '')}</td>
+          <td class="num">${li.unit_price != null ? money(symbol, li.unit_price) : ''}</td>
+          <td class="num">${li.amount != null ? money(symbol, li.amount) : ''}</td>
+        </tr>`).join('')
+
+      const bill = billRows ? `
+        <table class="bill">
+          <tr><th>Item</th><th class="num">Qty</th><th class="num">Rate</th><th class="num">Amount</th></tr>
+          ${billRows}
+        </table>` : ''
+
       return `
         <div class="entry">
           <span class="entry-emoji">${esc(icon)}</span>
@@ -65,6 +85,7 @@ export function buildDiaryHtml(trip, participants, expenses, events, settlementR
             </div>
             <div class="entry-meta">Paid by ${esc(name(item.paid_by))} · Split: ${shares}</div>
             ${item.note ? `<div class="entry-note">${esc(item.note)}</div>` : ''}
+            ${bill}
           </div>
         </div>`
     }).join('')
@@ -111,6 +132,38 @@ export function buildDiaryHtml(trip, participants, expenses, events, settlementR
          <td class="num">${money(symbol, r.amount)}</td></tr>`
       ).join('')}
     </table>` : ''
+
+  // The report leads the diary: the shape of the trip's spending first, the
+  // day-by-day story after it, the statement last.
+  const report = buildReport(expenses)
+  const donut = renderDonutSvg(report, symbol)
+
+  const reportRows = report.categories.map((category) => {
+    const subs = category.subs.map((sub) => `
+      <tr class="sub">
+        <td>${esc(`${sub.emoji} ${sub.label}`)}</td>
+        <td class="num muted">${sub.count}</td>
+        <td class="num">${money(symbol, sub.total)}</td>
+      </tr>`).join('')
+
+    return `
+      <tr class="head">
+        <td><span class="swatch" style="background:${category.color}"></span>${esc(`${category.emoji} ${category.label}`)}</td>
+        <td class="num muted">${percentLabel(category.share)}</td>
+        <td class="num">${money(symbol, category.total)}</td>
+      </tr>
+      ${subs}`
+  }).join('')
+
+  const reportBlock = report.total > 0 ? `
+  <section class="report">
+    <h2>Where the money went</h2>
+    <div class="chart">${donut}</div>
+    <table class="report-table">
+      <tr><th>Category</th><th class="num">Share</th><th class="num">Spent</th></tr>
+      ${reportRows}
+    </table>
+  </section>` : ''
 
   const dateRange = groups.length
     ? (groups.length === 1
@@ -161,6 +214,23 @@ export function buildDiaryHtml(trip, participants, expenses, events, settlementR
   .entry-body { flex: 1; min-width: 0; }
   .entry-meta { font-size: 12.5px; color: #64748b; }
   .entry-note { font-size: 13px; color: #475569; margin-top: 2px; white-space: pre-wrap; }
+  .bill { margin-top: 6px; width: auto; min-width: 60%; }
+  .bill th, .bill td { font-size: 12px; color: #475569; padding: 2px 10px 2px 0; border-bottom: none; }
+  .bill th { font-size: 10px; color: #94a3b8; }
+  .bill tr:first-child th { border-bottom: 1px solid #e2e8f0; }
+  .report { margin-bottom: 40px; break-inside: avoid-page; }
+  .report h2 { font-size: 18px; margin-bottom: 14px; }
+  .chart { text-align: center; margin-bottom: 10px; }
+  .chart svg { max-width: 100%; height: auto; }
+  .report-table tr.head td { font-weight: 700; border-top: 1px solid #cbd5e1; }
+  .report-table tr.sub td { font-size: 13px; color: #475569; border-bottom: none; padding-top: 2px; padding-bottom: 2px; }
+  .report-table tr.sub td:first-child { padding-left: 18px; }
+  .swatch {
+    display: inline-block;
+    width: 9px; height: 9px;
+    border-radius: 2px;
+    margin-right: 7px;
+  }
   .statement { margin-top: 44px; border-top: 3px double #94a3b8; padding-top: 22px; break-inside: avoid-page; }
   .statement h2 { font-size: 18px; margin-bottom: 14px; }
   .statement h3 { font-size: 14px; margin: 18px 0 6px; }
@@ -171,7 +241,15 @@ export function buildDiaryHtml(trip, participants, expenses, events, settlementR
   .muted { color: #94a3b8; font-size: 12px; }
   .grand { margin: 14px 0 4px; font-size: 15px; font-weight: 700; text-align: right; }
   footer { margin-top: 40px; text-align: center; font-size: 12px; color: #94a3b8; }
-  @page { margin: 16mm; }
+  /* Zero page margin, with the inset moved onto the body below, so that the
+     browser has nowhere to draw its own print header and footer — which is
+     where the trip's URL was being stamped onto every printed sheet. There is
+     no CSS that switches those off directly; denying them the margin box is
+     the only lever a page has. */
+  @page { margin: 0; }
+  @media print {
+    body { max-width: none; padding: 16mm; }
+  }
 </style>
 </head>
 <body>
@@ -180,6 +258,8 @@ export function buildDiaryHtml(trip, participants, expenses, events, settlementR
     ${dateRange ? `<div class="sub">${esc(dateRange)}</div>` : ''}
     <div class="people">${participants.map((p) => esc(`${p.emoji || ''} ${p.name}`.trim())).join(' · ')}</div>
   </header>
+
+  ${reportBlock}
 
   ${dayBlocks || '<p style="text-align:center;color:#64748b">Nothing here yet.</p>'}
 
@@ -199,20 +279,12 @@ export function buildDiaryHtml(trip, participants, expenses, events, settlementR
   </div>
 
   <footer>
-    Exported from Splitspend · ${new Date().toLocaleDateString()} · splitspend.vercel.app
+    Exported from Splitspend · ${new Date().toLocaleDateString()}
   </footer>
 </body>
 </html>`
 }
 
-/** Download the diary as a standalone .html file, openable and printable later. */
-export function downloadDiary(trip, participants, expenses, events, settlementRecords) {
-  const html = buildDiaryHtml(trip, participants, expenses, events, settlementRecords)
-  const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `${trip.name.replace(/[^a-zA-Z0-9]/g, '_')}_diary.html`
-  a.click()
-  URL.revokeObjectURL(url)
-}
+// The raw-HTML download that used to live here was retired in v7: the Word
+// export in exportWord.js covers the same need in a file people can edit.
+// buildDiaryHtml above is still what the on-screen preview and Print/PDF use.

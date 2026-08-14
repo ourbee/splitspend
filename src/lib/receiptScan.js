@@ -3,6 +3,8 @@
  * https://github.com/ourbee
  */
 
+import { normaliseLineItems } from './lineItems'
+
 // Bill scanning: the photo is downscaled in the browser, sent once to
 // /api/scan-receipt (which relays it to a vision model), and discarded.
 // Only the extracted text ever reaches the database — no image storage.
@@ -36,8 +38,10 @@ async function toBase64Jpeg(file) {
 
 /**
  * OCR a photographed bill.
- * Resolves to { merchant, amount, date, summary, text } — every field may be
- * null; the caller treats the result as an editable draft, never as authority.
+ * Resolves to { merchant, amount, date, summary, text, items } — every field
+ * may be null or empty; the caller treats the result as an editable draft,
+ * never as authority. `items` is the per-row breakdown; it is stored as a
+ * record beside the expense and never feeds the split maths.
  */
 export async function scanReceipt(file) {
   const image = await toBase64Jpeg(file)
@@ -65,5 +69,6 @@ export async function scanReceipt(file) {
     date: body.date || null,
     summary: body.summary || null,
     text: body.text || null,
+    items: normaliseLineItems(body.items) || [],
   }
 }

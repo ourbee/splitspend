@@ -5,7 +5,8 @@
 
 import { useMemo, useRef } from 'react'
 import useTripStore from '../store/tripStore'
-import { buildDiaryHtml, downloadDiary } from '../lib/exportDiary'
+import { buildDiaryHtml } from '../lib/exportDiary'
+import { downloadDiaryDoc } from '../lib/exportWord'
 
 /**
  * Full-screen preview of the trip diary.
@@ -43,12 +44,15 @@ export default function DiaryPreview({ onClose }) {
         </button>
         <span className="diary-bar-title">Trip Diary</span>
         <div style={{ display: 'flex', gap: 6 }}>
+          {/* Replaces the old raw-HTML download: a Word file is the same
+              content in something people can actually edit, and three buttons
+              is already as much as a phone bar takes. */}
           <button
             className="btn-ghost"
-            onClick={() => downloadDiary(trip, participants, expenses, events, settlementRecords)}
-            title="Save as an HTML file you can open later"
+            onClick={() => downloadDiaryDoc(trip, participants, expenses, events, settlementRecords)}
+            title="Download an editable Word document"
           >
-            Save file
+            Word
           </button>
           <button className="diary-print" onClick={handlePrint}>
             Print / PDF

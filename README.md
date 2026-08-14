@@ -41,12 +41,22 @@ accounts, no logins, no app install.
 - Per-person breakdown in Balances — **paid** vs **share** vs net, with each
   person's own spends one tap away
 - Notes on any expense, with **bill scanning** — photograph a receipt and the
-  text and total are read out of it into the note; the photo itself is never
-  stored or uploaded anywhere but the one read
+  total, the summary and the **per-item table** (name, quantity, rate, amount)
+  are read out of it; the photo itself is never stored or uploaded anywhere
+  but the one read. Bill rows are a record only: every balance is worked out
+  from the expense amount alone, so a misread receipt can never move what
+  somebody owes
+- **Reports** — spending by category as a donut you can tap open, with a
+  subcategory breakdown underneath. Categories come from a fixed list matched
+  offline by keyword first, with one batched model call for the leftovers;
+  **the model only ever picks labels, and every figure is summed in the
+  browser.** Any expense can be re-categorised by hand
 - **Non-expense events** — "Sunset at Anjuna", "Train to Goa" — added from the
   same + button, shown as distinct cards, ignored by all money maths
-- **Trip Diary export** — a printable keepsake: the day-by-day story with
-  notes and events, followed by an invoice-style statement
+- **Trip Diary export** — a printable keepsake that opens with the category
+  report, then the day-by-day story with notes, bill items and events, and
+  closes with an invoice-style statement. Print/PDF, or download it as an
+  editable Word document
 - Soft per-person colour coding — automatic, or pick your own colour and
   emoji from the name chip; your colour also themes the buttons **on your own
   device only**
@@ -74,19 +84,23 @@ npm run dev
 
 Database setup: run `supabase-schema.sql` in the Supabase SQL editor, then
 section 3 of `supabase-migration-v4.sql` (the RPC definitions), then
-`supabase-migration-v5.sql` and `supabase-migration-v6.sql`. Upgrading an
-existing v2/v3 install: run `supabase-migration-v4.sql`,
-`supabase-hardening-v4.sql`, then the v5 and v6 migrations in order.
+`supabase-migration-v5.sql`, `supabase-migration-v6.sql` and
+`supabase-migration-v7.sql`. Upgrading an existing v2/v3 install: run
+`supabase-migration-v4.sql`, `supabase-hardening-v4.sql`, then the v5, v6 and
+v7 migrations in order.
 
 Each migration is additive — it adds tables, columns and new functions but
 leaves every earlier RPC untouched, so **run it before deploying the matching
 frontend**. The previous bundle keeps working while it is in place.
 
-Bill scanning needs `GEMINI_API_KEY` set as a server-side environment
-variable (Vercel project settings, or `.env` locally when running
-`vercel dev`). Without it every other feature works normally and the scan
-button simply reports that scanning isn't configured. The key is never
-shipped to the browser — the image is relayed by `api/scan-receipt.js`.
+Bill scanning and the Reports tab's category labelling both need
+`GEMINI_API_KEY` set as a server-side environment variable (Vercel project
+settings, or `.env` locally when running `vercel dev`). Without it every other
+feature works normally: the scan button reports that scanning isn't
+configured, and Reports falls back to its offline keyword matcher — the chart
+and every total still appear, because no figure on that tab was ever coming
+from a model. The key is never shipped to the browser; the image and the
+descriptions are relayed by `api/scan-receipt.js` and `api/categorise.js`.
 
 ## Version history
 
@@ -106,5 +120,11 @@ shipped to the browser — the image is relayed by `api/scan-receipt.js`.
   no photo kept), the printable Trip Diary export, your colour theming your
   own interface, yourself listed first and preselected when adding an
   expense, and a firmer lift under a dragged card
+- **v7** — bills read down to their individual items, a separate camera and
+  gallery choice when scanning (Android pickers often hid the camera behind a
+  single file input), the Settle tab folded into Balances where the duplicate
+  net-balance card used to be, a new **Reports** tab with a category donut and
+  subcategory breakdown, that report leading the Trip Diary, an editable Word
+  export, and no URL printed on the exported diary
 
 Created by **Ritwik Balo**.

@@ -10,7 +10,7 @@ import ScrollJump from './ScrollJump'
 import DayGroup from './DayGroup'
 import { groupByDay } from '../lib/dates'
 import { sortExpenses } from '../lib/expenseOrder'
-import { categorize } from '../lib/categories'
+import { guessLabel } from '../lib/categories'
 
 // Everything is already in memory, so search is a plain filter — no query,
 // no debounce needed at trip-sized data. Diary events join in on their
@@ -24,12 +24,21 @@ function matches(expense, query, participants) {
       .includes(query)
   }
   const payer = participants.find((p) => p.id === expense.paid_by)
+  const guess = guessLabel(expense.description)
   const haystack = [
     expense.description,
     expense.note,
     payer?.name,
     String(expense.amount),
-    categorize(expense.description).key,
+    // Searching "food" or "taxi" should find the expense whether its labels
+    // were stored by a previous Reports visit or are only being guessed now.
+    expense.category,
+    expense.subcategory,
+    guess.category.label,
+    guess.sub.label,
+    // Bill rows read off a photo are searchable too — "paneer" finds the
+    // dinner it was an item on.
+    ...(expense.line_items || []).map((i) => i.name),
   ]
     .filter(Boolean)
     .join(' ')

@@ -10,7 +10,7 @@ import useTrip from '../hooks/useTrip'
 import useRealtime from '../hooks/useRealtime'
 import ExpenseList from '../components/ExpenseList'
 import BalanceSummary from '../components/BalanceSummary'
-import SettlementList from '../components/SettlementList'
+import ReportsTab from '../components/ReportsTab'
 import AddExpenseModal from '../components/AddExpenseModal'
 import AddParticipantModal from '../components/AddParticipantModal'
 import QRCodeDisplay from '../components/QRCodeDisplay'
@@ -234,17 +234,17 @@ export default function TripPage() {
           Balances
         </button>
         <button
-          className={`tab ${activeTab === 'settle' ? 'active' : ''}`}
-          onClick={() => setActiveTab('settle')}
+          className={`tab ${activeTab === 'reports' ? 'active' : ''}`}
+          onClick={() => setActiveTab('reports')}
         >
-          Settle
+          Reports
         </button>
       </div>
 
       {/* Tab Content */}
       {activeTab === 'expenses' && <ExpenseList onEdit={handleEdit} />}
       {activeTab === 'balances' && <BalanceSummary />}
-      {activeTab === 'settle' && <SettlementList />}
+      {activeTab === 'reports' && <ReportsTab />}
 
       {/* FAB */}
       <button className="fab" onClick={() => setShowAddExpense(true)}>

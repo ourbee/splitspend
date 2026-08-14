@@ -120,10 +120,13 @@ const useTripStore = create((set, get) => ({
     return tripId
   },
 
-  addExpense: async (tripId, description, amount, paidBy, splits, expenseDate, note, emoji) => {
+  // `extras` carries the v7 additions — { lineItems, category, subcategory }.
+  // It is an options object rather than three more positional arguments
+  // because the signature was already nine deep.
+  addExpense: async (tripId, description, amount, paidBy, splits, expenseDate, note, emoji, extras = {}) => {
     if (!supabase) throw new Error('Supabase not configured')
 
-    const { error } = await supabase.rpc('add_expense_v5', {
+    const { error } = await supabase.rpc('add_expense_v7', {
       p_trip_id: tripId,
       p_description: description,
       p_amount: amount,
@@ -133,6 +136,9 @@ const useTripStore = create((set, get) => ({
       p_expense_date: expenseDate || null,
       p_note: note || null,
       p_emoji: emoji || null,
+      p_line_items: extras.lineItems || null,
+      p_category: extras.category || null,
+      p_subcategory: extras.subcategory || null,
     })
     if (error) throw error
 
@@ -140,10 +146,10 @@ const useTripStore = create((set, get) => ({
     await get().fetchTrip(tripId)
   },
 
-  updateExpense: async (expenseId, tripId, description, amount, paidBy, splits, expenseDate, note, emoji) => {
+  updateExpense: async (expenseId, tripId, description, amount, paidBy, splits, expenseDate, note, emoji, extras = {}) => {
     if (!supabase) throw new Error('Supabase not configured')
 
-    const { error } = await supabase.rpc('update_expense_v5', {
+    const { error } = await supabase.rpc('update_expense_v7', {
       p_trip_id: tripId,
       p_expense_id: expenseId,
       p_description: description,
@@ -153,11 +159,47 @@ const useTripStore = create((set, get) => ({
       p_expense_date: expenseDate || null,
       p_note: note || null,
       p_emoji: emoji || null,
+      p_line_items: extras.lineItems || null,
+      p_category: extras.category || null,
+      p_subcategory: extras.subcategory || null,
     })
     if (error) throw error
 
     broadcastRefresh(tripId)
     await get().fetchTrip(tripId)
+  },
+
+  /**
+   * Write category/subcategory for many expenses at once.
+   *
+   * The Reports tab uses this twice: to backfill a trip whose expenses predate
+   * v7, and to save a single hand correction. Labels only — no amount, split
+   * or date can be reached through this path, so a mislabelled expense is
+   * always a cosmetic problem and never a financial one.
+   */
+  setExpenseLabels: async (tripId, labels) => {
+    if (!supabase) throw new Error('Supabase not configured')
+    if (!labels.length) return 0
+
+    const { data, error } = await supabase.rpc('set_expense_labels_v7', {
+      p_trip_id: tripId,
+      p_labels: labels,
+    })
+    if (error) throw error
+
+    // Applied locally so the donut redraws immediately rather than waiting on
+    // a refetch, then broadcast so other phones pick the labels up too.
+    const byId = new Map(labels.map((l) => [l.id, l]))
+    set((state) => ({
+      expenses: state.expenses.map((e) => {
+        const label = byId.get(e.id)
+        return label
+          ? { ...e, category: label.category, subcategory: label.subcategory }
+          : e
+      }),
+    }))
+    broadcastRefresh(tripId)
+    return data ?? 0
   },
 
   // Applied locally first so the card stays where it was dropped; the server

@@ -3,101 +3,65 @@
  * https://github.com/ourbee
  */
 
-// Best-effort category guess from the expense description. Display-only —
-// nothing is stored, so an odd guess never corrupts anyone's data, and the
-// mapping can be changed freely without a migration.
+// Best-effort category guess from the expense description, matched against the
+// fixed taxonomy. Free, offline, instant and — unlike a model — deterministic,
+// so two phones looking at the same trip always draw the same donut.
 //
-// Order matters: the first category whose pattern matches wins, so the more
-// specific groups (drinks, groceries) are listed before the broader ones.
-const CATEGORIES = [
-  {
-    key: 'drinks',
-    emoji: '🍻',
-    words: ['beer', 'bar', 'pub', 'wine', 'whisky', 'whiskey', 'rum', 'vodka', 'gin',
-      'cocktail', 'drink', 'drinks', 'alcohol', 'liquor', 'booze', 'brewery'],
-  },
-  {
-    key: 'groceries',
-    emoji: '🛒',
-    words: ['grocery', 'groceries', 'supermarket', 'kirana', 'bigbasket', 'blinkit',
-      'zepto', 'dmart', 'provisions', 'vegetables', 'veggies', 'sabzi', 'milk', 'eggs'],
-  },
-  {
-    key: 'food',
-    emoji: '🍽️',
-    words: ['food', 'lunch', 'dinner', 'breakfast', 'brunch', 'meal', 'meals',
-      'restaurant', 'cafe', 'café', 'coffee', 'chai', 'tea', 'snack', 'snacks',
-      'pizza', 'burger', 'biryani', 'thali', 'dhaba', 'canteen', 'swiggy', 'zomato',
-      'dessert', 'bakery', 'tiffin', 'khana', 'nashta', 'buffet', 'icecream',
-      'ice cream', 'sweets', 'mithai', 'momo', 'momos', 'dosa', 'paratha'],
-  },
-  {
-    key: 'transport',
-    emoji: '🚗',
-    words: ['cab', 'cabs', 'taxi', 'uber', 'ola', 'rapido', 'auto', 'rickshaw',
-      'train', 'irctc', 'railway', 'flight', 'flights', 'plane', 'airline', 'airport',
-      'petrol', 'diesel', 'fuel', 'bus', 'metro', 'toll', 'parking', 'ferry', 'boat',
-      'transport', 'travel', 'car rental', 'bike rental', 'scooty', 'scooter', 'ride'],
-  },
-  {
-    key: 'lodging',
-    emoji: '🏠',
-    words: ['hotel', 'stay', 'airbnb', 'hostel', 'room', 'rooms', 'lodge', 'lodging',
-      'resort', 'homestay', 'guesthouse', 'guest house', 'dorm', 'camp', 'camping',
-      'tent', 'rent', 'accommodation', 'checkin', 'check-in'],
-  },
-  {
-    key: 'entertainment',
-    emoji: '🎬',
-    words: ['movie', 'movies', 'cinema', 'film', 'pvr', 'inox', 'concert', 'gig',
-      'show', 'club', 'clubbing', 'party', 'bowling', 'arcade', 'karaoke', 'netflix',
-      'ticket', 'tickets'],
-  },
-  {
-    key: 'experience',
-    emoji: '🎟️',
-    words: ['trek', 'trekking', 'hike', 'hiking', 'museum', 'entry', 'entrance',
-      'safari', 'guide', 'rafting', 'zoo', 'park', 'tour', 'sightseeing', 'temple',
-      'fort', 'palace', 'boating', 'diving', 'snorkel', 'snorkelling', 'kayak',
-      'paragliding', 'zipline', 'spa', 'activity', 'adventure', 'cruise'],
-  },
-  {
-    key: 'shopping',
-    emoji: '🛍️',
-    words: ['shopping', 'clothes', 'shirt', 'tshirt', 'shoes', 'souvenir', 'souvenirs',
-      'gift', 'gifts', 'mall', 'amazon', 'flipkart', 'myntra', 'bag', 'jacket'],
-  },
-  {
-    key: 'health',
-    emoji: '💊',
-    words: ['medicine', 'medicines', 'medical', 'pharmacy', 'chemist', 'doctor',
-      'hospital', 'clinic', 'meds', 'first aid', 'bandage'],
-  },
-  {
-    key: 'connectivity',
-    emoji: '📱',
-    words: ['sim', 'recharge', 'data', 'wifi', 'internet', 'phone', 'mobile'],
-  },
-]
+// This runs FIRST for every expense. Only descriptions it can't place fall
+// through to the batched Gemini call in autoCategorise.js, which keeps the
+// network out of the common path entirely.
+//
+// The emoji shown on a card comes from the SUBcategory, not the head, so the
+// icons stay as specific as they were before the taxonomy existed: a beer is
+// still 🍻 rather than a generic 🍽️.
 
-// Build one word-boundary regex per category, allowing an optional plural "s".
-const MATCHERS = CATEGORIES.map((c) => ({
-  ...c,
-  re: new RegExp(`\\b(${c.words.map(escapeRegex).join('|')})s?\\b`, 'i'),
-}))
-
-const DEFAULT_CATEGORY = { key: 'other', emoji: '💸' }
+import { TAXONOMY, DEFAULT_SUB, OTHER_CATEGORY } from './taxonomy'
 
 function escapeRegex(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-export function categorize(description) {
-  if (!description) return DEFAULT_CATEGORY
-  const found = MATCHERS.find((c) => c.re.test(description))
-  return found ? { key: found.key, emoji: found.emoji } : DEFAULT_CATEGORY
+// One word-boundary regex per subcategory, allowing an optional plural "s".
+// Flattened in taxonomy order, so the first match wins and the ordering
+// decisions documented in taxonomy.js (nightlife above entry, long travel
+// above tickets) are what actually resolves ambiguous words like "ticket".
+const MATCHERS = []
+for (const category of TAXONOMY) {
+  for (const sub of category.subs) {
+    if (!sub.words.length) continue
+    MATCHERS.push({
+      category,
+      sub,
+      re: new RegExp(`\\b(${sub.words.map(escapeRegex).join('|')})s?\\b`, 'i'),
+    })
+  }
 }
 
+/**
+ * Guess a description's place in the taxonomy.
+ *
+ * @returns {{ category, sub, matched }} matched is false when nothing hit and
+ *   the result is the Other/Miscellaneous fallback — that flag is what marks an
+ *   expense as worth asking Gemini about.
+ */
+export function guessLabel(description) {
+  if (description) {
+    const hit = MATCHERS.find((m) => m.re.test(description))
+    if (hit) return { category: hit.category, sub: hit.sub, matched: true }
+  }
+  return { category: OTHER_CATEGORY, sub: DEFAULT_SUB, matched: false }
+}
+
+/**
+ * The stored-label pair for a description, ready for the database.
+ * @returns {{ category: string, subcategory: string, matched: boolean }}
+ */
+export function guessLabelStrings(description) {
+  const { category, sub, matched } = guessLabel(description)
+  return { category: category.label, subcategory: sub.label, matched }
+}
+
+/** Back-compat: the emoji a card falls back to when nobody picked one. */
 export function categoryEmoji(description) {
-  return categorize(description).emoji
+  return guessLabel(description).sub.emoji
 }
