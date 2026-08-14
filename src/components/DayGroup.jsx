@@ -29,6 +29,7 @@ import { round2 } from '../lib/splits'
 export default function DayGroup({ group, onEdit, onDelete, dragDisabled }) {
   const trip = useTripStore((s) => s.trip)
   const reorderExpense = useTripStore((s) => s.reorderExpense)
+  const reorderEvent = useTripStore((s) => s.reorderEvent)
   const setReordering = useTripStore((s) => s.setReordering)
   const symbol = currencySymbol(trip?.currency)
 
@@ -73,7 +74,11 @@ export default function DayGroup({ group, onEdit, onDelete, dragDisabled }) {
     setItems(next)
 
     try {
-      await reorderExpense(trip.id, active.id, positionFor(next, to))
+      // Expenses and events share one sort_order space per day, so the
+      // midpoint works the same — only the RPC differs.
+      const moved = ordered[from]
+      const reorder = moved?._type === 'event' ? reorderEvent : reorderExpense
+      await reorder(trip.id, active.id, positionFor(next, to))
     } catch (err) {
       setError('Could not save the new order: ' + err.message)
     }

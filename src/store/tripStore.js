@@ -20,6 +20,7 @@ const useTripStore = create((set, get) => ({
   trip: null,
   participants: [],
   expenses: [],
+  events: [],
   settlementRecords: [],
   myIdentity: null,
   loading: true,
@@ -87,6 +88,9 @@ const useTripStore = create((set, get) => ({
         trip: data.trip,
         participants,
         expenses: sortExpenses(data.expenses || []),
+        // _type marks diary events apart from expenses once the two lists are
+        // merged into one day timeline. Older servers return no 'events' key.
+        events: sortExpenses((data.events || []).map((ev) => ({ ...ev, _type: 'event' }))),
         settlementRecords: data.settlement_records || [],
         myIdentity,
         loading: false,
@@ -176,6 +180,77 @@ const useTripStore = create((set, get) => ({
     })
     if (error) {
       set({ expenses: previous })
+      throw error
+    }
+
+    broadcastRefresh(tripId)
+    await get().fetchTrip(tripId)
+  },
+
+  addEvent: async (tripId, title, eventDate, note, emoji) => {
+    if (!supabase) throw new Error('Supabase not configured')
+
+    const { error } = await supabase.rpc('add_event_v6', {
+      p_trip_id: tripId,
+      p_title: title,
+      p_created_by: get().myIdentity,
+      p_event_date: eventDate || null,
+      p_note: note || null,
+      p_emoji: emoji || null,
+    })
+    if (error) throw error
+
+    broadcastRefresh(tripId)
+    await get().fetchTrip(tripId)
+  },
+
+  updateEvent: async (eventId, tripId, title, eventDate, note, emoji) => {
+    if (!supabase) throw new Error('Supabase not configured')
+
+    const { error } = await supabase.rpc('update_event_v6', {
+      p_trip_id: tripId,
+      p_event_id: eventId,
+      p_title: title,
+      p_event_date: eventDate || null,
+      p_note: note || null,
+      p_emoji: emoji || null,
+    })
+    if (error) throw error
+
+    broadcastRefresh(tripId)
+    await get().fetchTrip(tripId)
+  },
+
+  deleteEvent: async (eventId, tripId) => {
+    if (!supabase) throw new Error('Supabase not configured')
+
+    const { error } = await supabase.rpc('delete_event_v6', {
+      p_trip_id: tripId,
+      p_event_id: eventId,
+    })
+    if (error) throw error
+
+    broadcastRefresh(tripId)
+    await get().fetchTrip(tripId)
+  },
+
+  reorderEvent: async (tripId, eventId, sortOrder) => {
+    if (!supabase) throw new Error('Supabase not configured')
+
+    const previous = get().events
+    set({
+      events: sortExpenses(
+        previous.map((e) => (e.id === eventId ? { ...e, sort_order: sortOrder } : e))
+      ),
+    })
+
+    const { error } = await supabase.rpc('reorder_event_v6', {
+      p_trip_id: tripId,
+      p_event_id: eventId,
+      p_sort_order: sortOrder,
+    })
+    if (error) {
+      set({ events: previous })
       throw error
     }
 
@@ -338,6 +413,7 @@ const useTripStore = create((set, get) => ({
       trip: null,
       participants: [],
       expenses: [],
+      events: [],
       settlementRecords: [],
       myIdentity: null,
       loading: true,

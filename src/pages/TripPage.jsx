@@ -15,9 +15,10 @@ import AddExpenseModal from '../components/AddExpenseModal'
 import AddParticipantModal from '../components/AddParticipantModal'
 import QRCodeDisplay from '../components/QRCodeDisplay'
 import ExportModal from '../components/ExportModal'
+import DiaryPreview from '../components/DiaryPreview'
 import AboutModal from '../components/AboutModal'
 import IdentitySheet from '../components/IdentitySheet'
-import { paletteEntry, resolveColorSlots } from '../lib/personColors'
+import { paletteEntry, personTheme, resolveColorSlots } from '../lib/personColors'
 
 export default function TripPage() {
   const { tripId } = useParams()
@@ -41,6 +42,7 @@ export default function TripPage() {
   const [showQRAuto, setShowQRAuto] = useState(() => !!location.state?.justCreated)
   const [showAddParticipant, setShowAddParticipant] = useState(false)
   const [showExport, setShowExport] = useState(false)
+  const [showDiary, setShowDiary] = useState(false)
   const [showAbout, setShowAbout] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
   const [showIdentity, setShowIdentity] = useState(false)
@@ -93,6 +95,12 @@ export default function TripPage() {
 
   const creator = isCreator()
   const me = participants.find((p) => p.id === myIdentity)
+  const colorSlots = resolveColorSlots(participants)
+  // My colour re-skins the buttons on MY device only (the container's CSS
+  // variables cascade into every button, tab, chip and modal below it).
+  // What anyone else sees — including my card tints on their screen — is
+  // driven by their own identity, not mine.
+  const theme = me ? personTheme(colorSlots[me.id]) : {}
 
   const showQR = showQRManual || (showQRAuto && !!myIdentity)
 
@@ -121,7 +129,7 @@ export default function TripPage() {
   }
 
   return (
-    <div className="container" style={{ paddingTop: 16, paddingBottom: 100 }}>
+    <div className="container" style={{ paddingTop: 16, paddingBottom: 100, ...theme }}>
       {/* Header */}
       <div style={{
         display: 'flex',
@@ -136,13 +144,13 @@ export default function TripPage() {
             <button
               className="identity-chip"
               onClick={() => setShowIdentity(true)}
-              title="Change your colour and emoji"
+              title="Change your colour and emoji, or switch identity"
             >
               <span
                 className="person-dot"
-                style={{ background: paletteEntry(resolveColorSlots(participants)[me.id]).accent }}
+                style={{ background: paletteEntry(colorSlots[me.id]).accent }}
               />
-              You are {me.emoji || ''} {me.name}
+              {me.emoji || ''} {me.name}
             </button>
           )}
         </div>
@@ -193,12 +201,6 @@ export default function TripPage() {
                     Add Participant
                   </button>
                 )}
-                <button
-                  className="menu-item"
-                  onClick={handleSwitchIdentity}
-                >
-                  Not you? Switch identity
-                </button>
                 <button
                   className="menu-item"
                   onClick={() => { setShowExport(true); setShowMenu(false) }}
@@ -263,13 +265,22 @@ export default function TripPage() {
         <AddParticipantModal onClose={() => setShowAddParticipant(false)} />
       )}
       {showExport && (
-        <ExportModal onClose={() => setShowExport(false)} />
+        <ExportModal
+          onClose={() => setShowExport(false)}
+          onOpenDiary={() => { setShowExport(false); setShowDiary(true) }}
+        />
+      )}
+      {showDiary && (
+        <DiaryPreview onClose={() => setShowDiary(false)} />
       )}
       {showAbout && (
         <AboutModal onClose={() => setShowAbout(false)} />
       )}
       {showIdentity && (
-        <IdentitySheet onClose={() => setShowIdentity(false)} />
+        <IdentitySheet
+          onClose={() => setShowIdentity(false)}
+          onSwitchIdentity={handleSwitchIdentity}
+        />
       )}
     </div>
   )

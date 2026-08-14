@@ -15,23 +15,27 @@
 // left stripe on the card and a dot beside the name. Only these vetted pairs
 // are ever selectable — that is what guarantees legibility, rather than
 // validating a freeform colour picker after the fact.
+// `deep` is a darker cut of the same hue, used as the button/interface colour
+// when this person's colour themes their own device — the accents are tuned
+// for thin stripes and dots, but several (amber, lime) are too light to carry
+// white button text; the deeps all can.
 const PALETTE = [
-  { name: 'Blue', accent: '#3b82f6', tint: '#eff6ff' },
-  { name: 'Green', accent: '#22c55e', tint: '#f0fdf4' },
-  { name: 'Violet', accent: '#8b5cf6', tint: '#f5f3ff' },
-  { name: 'Amber', accent: '#f59e0b', tint: '#fffbeb' },
-  { name: 'Pink', accent: '#ec4899', tint: '#fdf2f8' },
-  { name: 'Teal', accent: '#14b8a6', tint: '#f0fdfa' },
-  { name: 'Red', accent: '#ef4444', tint: '#fef2f2' },
-  { name: 'Lime', accent: '#84cc16', tint: '#f7fee7' },
-  { name: 'Cyan', accent: '#06b6d4', tint: '#ecfeff' },
-  { name: 'Fuchsia', accent: '#d946ef', tint: '#fdf4ff' },
-  { name: 'Indigo', accent: '#6366f1', tint: '#eef2ff' },
-  { name: 'Orange', accent: '#f97316', tint: '#fff7ed' },
-  { name: 'Emerald', accent: '#10b981', tint: '#ecfdf5' },
-  { name: 'Rose', accent: '#f43f5e', tint: '#fff1f2' },
-  { name: 'Sky', accent: '#0ea5e9', tint: '#f0f9ff' },
-  { name: 'Purple', accent: '#a855f7', tint: '#faf5ff' },
+  { name: 'Blue', accent: '#3b82f6', tint: '#eff6ff', deep: '#2563eb' },
+  { name: 'Green', accent: '#22c55e', tint: '#f0fdf4', deep: '#16a34a' },
+  { name: 'Violet', accent: '#8b5cf6', tint: '#f5f3ff', deep: '#7c3aed' },
+  { name: 'Amber', accent: '#f59e0b', tint: '#fffbeb', deep: '#b45309' },
+  { name: 'Pink', accent: '#ec4899', tint: '#fdf2f8', deep: '#db2777' },
+  { name: 'Teal', accent: '#14b8a6', tint: '#f0fdfa', deep: '#0d9488' },
+  { name: 'Red', accent: '#ef4444', tint: '#fef2f2', deep: '#dc2626' },
+  { name: 'Lime', accent: '#84cc16', tint: '#f7fee7', deep: '#4d7c0f' },
+  { name: 'Cyan', accent: '#06b6d4', tint: '#ecfeff', deep: '#0e7490' },
+  { name: 'Fuchsia', accent: '#d946ef', tint: '#fdf4ff', deep: '#c026d3' },
+  { name: 'Indigo', accent: '#6366f1', tint: '#eef2ff', deep: '#4f46e5' },
+  { name: 'Orange', accent: '#f97316', tint: '#fff7ed', deep: '#ea580c' },
+  { name: 'Emerald', accent: '#10b981', tint: '#ecfdf5', deep: '#059669' },
+  { name: 'Rose', accent: '#f43f5e', tint: '#fff1f2', deep: '#e11d48' },
+  { name: 'Sky', accent: '#0ea5e9', tint: '#f0f9ff', deep: '#0369a1' },
+  { name: 'Purple', accent: '#a855f7', tint: '#faf5ff', deep: '#9333ea' },
 ]
 
 const FALLBACK = { name: 'None', accent: 'var(--color-border)', tint: 'var(--color-surface)' }
@@ -102,6 +106,22 @@ export function resolveColorSlots(participants = []) {
   }
 
   return slots
+}
+
+/**
+ * CSS variable overrides that re-skin the interface chrome (buttons, tabs,
+ * the + button…) in one person's colour — applied on THEIR device only, at
+ * the page container, so nothing about how others see the group changes.
+ * Card tints are driven per-expense by paletteEntry and are untouched.
+ */
+export function personTheme(slot) {
+  if (slot == null || slot < 0) return {}
+  const c = PALETTE[slot % PALETTE.length]
+  return {
+    '--color-primary': c.deep,
+    '--color-primary-hover': `color-mix(in srgb, ${c.deep} 85%, black)`,
+    '--color-primary-light': c.tint,
+  }
 }
 
 /** Slots already spoken for by someone other than `participantId`. */

@@ -6,7 +6,7 @@
 import { calculateSettlements } from './settlement'
 import { currencySymbol } from './currency'
 
-export function exportTripToCSV(trip, participants, expenses, settlementRecords) {
+export function exportTripToCSV(trip, participants, expenses, events, settlementRecords) {
   const symbol = currencySymbol(trip.currency)
   const getName = (id) => participants.find(p => p.id === id)?.name || 'Unknown'
 
@@ -40,6 +40,18 @@ export function exportTripToCSV(trip, participants, expenses, settlementRecords)
     lines.push(`${csvEscape(exp.description)},${symbol}${Number(exp.amount).toFixed(2)},${csvEscape(payer)},${csvEscape(shares)},${csvEscape(addedBy)},${date}`)
   }
   lines.push('')
+
+  // Diary events (non-expense)
+  if (events?.length) {
+    lines.push('EVENTS')
+    lines.push('Title,Note,Added By,Date')
+    for (const ev of events) {
+      const addedBy = ev.created_by ? getName(ev.created_by) : ''
+      const date = new Date(ev.event_date || ev.created_at).toLocaleDateString()
+      lines.push(`${csvEscape(ev.title)},${csvEscape(ev.note || '')},${csvEscape(addedBy)},${date}`)
+    }
+    lines.push('')
+  }
 
   // Balances (settlement records included as real transfers)
   const { balances, settlements } = calculateSettlements(participants, expenses, settlementRecords)

@@ -236,7 +236,9 @@ body {
   border: none;
   font-size: 28px;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+  /* Tinted from the current primary so it follows a person's chosen colour
+     instead of staying the old indigo. */
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--color-primary) 40%, transparent);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -584,8 +586,136 @@ body {
   gap: 10px;
 }
 
-.expense-dragging .card {
+/* Long-pressed card lifts off the page: a slight shift right + grow + deep
+   shadow. The lift transform lives on the INNER card so it composes with the
+   dnd-kit translate on the wrapper instead of fighting it. */
+.day-items .card,
+.day-items .event-card {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.expense-dragging .card,
+.expense-dragging .event-card {
+  transform: translateX(10px) scale(1.02);
   box-shadow: var(--shadow-modal);
+}
+
+/* Diary events — deliberately NOT an expense card: flat surface, dashed
+   outline, no person tint, no left stripe. */
+.event-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: var(--color-surface);
+  border: 1.5px dashed var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-md);
+}
+
+.event-card-emoji {
+  font-size: 22px;
+  line-height: 1.2;
+  flex-shrink: 0;
+}
+
+/* Bill scan trigger beside the note box */
+.scan-trigger {
+  flex-shrink: 0;
+  width: 52px;
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.scan-trigger:hover:not(:disabled),
+.scan-trigger:focus-visible {
+  border-color: var(--color-primary);
+}
+
+.scan-trigger:disabled {
+  cursor: wait;
+}
+
+.spinner-inline {
+  width: 18px;
+  height: 18px;
+  border-width: 2px;
+  margin: 0;
+}
+
+/* Trip diary preview — full-screen, with the page itself in an iframe */
+.diary-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  background: var(--color-bg);
+  display: flex;
+  flex-direction: column;
+}
+
+.diary-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: 8px 12px;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.diary-bar-title {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.diary-print {
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-primary);
+  color: #fff;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+
+.diary-frame {
+  flex: 1;
+  width: 100%;
+  border: none;
+  background: #fff;
+}
+
+/* "Not you?" row inside the identity sheet */
+.identity-switch {
+  display: block;
+  width: 100%;
+  margin-top: 22px;
+  padding: 12px var(--space-md);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.identity-switch:hover,
+.identity-switch:focus-visible {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
 }
 
 /* Loading spinner */

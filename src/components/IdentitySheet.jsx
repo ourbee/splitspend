@@ -9,7 +9,7 @@ import { EMOJI_OPTIONS } from '../lib/emojis'
 import { paletteSwatches, resolveColorSlots, takenSlots } from '../lib/personColors'
 import EmojiPicker from './EmojiPicker'
 
-export default function IdentitySheet({ onClose }) {
+export default function IdentitySheet({ onClose, onSwitchIdentity }) {
   const trip = useTripStore((s) => s.trip)
   const participants = useTripStore((s) => s.participants)
   const myIdentity = useTripStore((s) => s.myIdentity)
@@ -112,7 +112,17 @@ export default function IdentitySheet({ onClose }) {
             <p style={{ color: 'var(--color-danger)', fontSize: 13, marginTop: 14 }}>{error}</p>
           )}
 
-          <button className="btn btn-secondary" style={{ marginTop: 22 }} onClick={onClose}>
+          {onSwitchIdentity && (
+            <button
+              type="button"
+              className="identity-switch"
+              onClick={onSwitchIdentity}
+            >
+              Not you? Switch identity
+            </button>
+          )}
+
+          <button className="btn btn-secondary" style={{ marginTop: 14 }} onClick={onClose}>
             Done
           </button>
         </div>

@@ -9,11 +9,20 @@ import ConfirmDialog from './ConfirmDialog'
 import ScrollJump from './ScrollJump'
 import DayGroup from './DayGroup'
 import { groupByDay } from '../lib/dates'
+import { sortExpenses } from '../lib/expenseOrder'
 import { categorize } from '../lib/categories'
 
 // Everything is already in memory, so search is a plain filter — no query,
-// no debounce needed at trip-sized data.
+// no debounce needed at trip-sized data. Diary events join in on their
+// title and note.
 function matches(expense, query, participants) {
+  if (expense._type === 'event') {
+    return [expense.title, expense.note]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+      .includes(query)
+  }
   const payer = participants.find((p) => p.id === expense.paid_by)
   const haystack = [
     expense.description,
@@ -30,9 +39,11 @@ function matches(expense, query, participants) {
 
 export default function ExpenseList({ onEdit }) {
   const expenses = useTripStore((s) => s.expenses)
+  const events = useTripStore((s) => s.events)
   const participants = useTripStore((s) => s.participants)
   const trip = useTripStore((s) => s.trip)
   const deleteExpense = useTripStore((s) => s.deleteExpense)
+  const deleteEvent = useTripStore((s) => s.deleteEvent)
 
   const [confirmingId, setConfirmingId] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -41,10 +52,16 @@ export default function ExpenseList({ onEdit }) {
 
   const query = search.trim().toLowerCase()
 
+  // Expenses and diary events interleave into one timeline; they share the
+  // per-day sort_order space, so one sort covers both.
+  const items = useMemo(() => sortExpenses([...expenses, ...events]), [expenses, events])
+
   const filtered = useMemo(
-    () => (query ? expenses.filter((e) => matches(e, query, participants)) : expenses),
-    [expenses, query, participants]
+    () => (query ? items.filter((e) => matches(e, query, participants)) : items),
+    [items, query, participants]
   )
+
+  const confirming = confirmingId ? items.find((e) => e.id === confirmingId) : null
 
   // Day totals follow the filter, so they always add up to what is on screen.
   const groups = useMemo(() => groupByDay(filtered), [filtered])
@@ -53,7 +70,11 @@ export default function ExpenseList({ onEdit }) {
     setBusy(true)
     setError(null)
     try {
-      await deleteExpense(confirmingId, trip.id)
+      if (confirming?._type === 'event') {
+        await deleteEvent(confirmingId, trip.id)
+      } else {
+        await deleteExpense(confirmingId, trip.id)
+      }
       setConfirmingId(null)
     } catch (err) {
       setError('Failed to delete: ' + err.message)
@@ -61,7 +82,7 @@ export default function ExpenseList({ onEdit }) {
     setBusy(false)
   }
 
-  if (expenses.length === 0) {
+  if (items.length === 0) {
     return (
       <div className="empty-state">
         <p style={{ fontSize: 36, marginBottom: 8 }}>No expenses yet</p>
@@ -95,7 +116,7 @@ export default function ExpenseList({ onEdit }) {
 
       {query && (
         <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: '0 0 10px' }}>
-          {filtered.length} of {expenses.length} expense{expenses.length === 1 ? '' : 's'}
+          {filtered.length} of {items.length} item{items.length === 1 ? '' : 's'}
           {' · '}reordering is off while searching
         </p>
       )}
@@ -122,7 +143,7 @@ export default function ExpenseList({ onEdit }) {
 
       {confirmingId && (
         <ConfirmDialog
-          title="Delete this expense?"
+          title={confirming?._type === 'event' ? 'Delete this event?' : 'Delete this expense?'}
           message="This removes it for everyone in the group."
           confirmLabel="Delete"
           danger

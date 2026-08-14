@@ -6,7 +6,9 @@
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import ExpenseCard from './ExpenseCard'
+import EventCard from './EventCard'
 
+/** One draggable card in a day — either an expense or a diary event. */
 export default function SortableExpense({ expense, onEdit, onDelete, disabled }) {
   const {
     attributes, listeners, setNodeRef, transform, transition, isDragging,
@@ -30,13 +32,22 @@ export default function SortableExpense({ expense, onEdit, onDelete, disabled })
       {...attributes}
       {...(disabled ? {} : listeners)}
     >
-      <ExpenseCard
-        expense={expense}
-        showDate={false}
-        draggable={!disabled}
-        onEdit={onEdit}
-        onDelete={onDelete}
-      />
+      {expense._type === 'event' ? (
+        <EventCard
+          event={expense}
+          draggable={!disabled}
+          onEdit={onEdit}
+          onDelete={onDelete}
+        />
+      ) : (
+        <ExpenseCard
+          expense={expense}
+          showDate={false}
+          draggable={!disabled}
+          onEdit={onEdit}
+          onDelete={onDelete}
+        />
+      )}
     </div>
   )
 }

@@ -16,9 +16,9 @@ function localKey(date) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 }
 
-/** Stable YYYY-MM-DD bucket key for an expense. */
+/** Stable YYYY-MM-DD bucket key for an expense or event. */
 export function dayKey(expense) {
-  const d = expense.expense_date
+  const d = expense.expense_date || expense.event_date
   if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}/.test(d)) return d.slice(0, 10)
   if (expense.created_at) return localKey(new Date(expense.created_at))
   return localKey(new Date())
@@ -80,7 +80,8 @@ export function groupByDay(expenses) {
       groups.push(group)
     }
     group.expenses.push(expense)
-    group.total += Number(expense.amount)
+    // Events carry no amount and must not turn the day total into NaN.
+    group.total += Number(expense.amount) || 0
   }
 
   return groups
