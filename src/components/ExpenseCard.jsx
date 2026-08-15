@@ -3,12 +3,14 @@
  * https://github.com/ourbee
  */
 
+import { useState } from 'react'
 import useTripStore from '../store/tripStore'
 import { currencySymbol } from '../lib/currency'
 import { isUnequalSplit } from '../lib/splits'
 import { paletteEntry, resolveColorSlots } from '../lib/personColors'
-import { categoryEmoji } from '../lib/categories'
+import { categoryEmoji, labelFor } from '../lib/categories'
 import LineItemsTable from './LineItemsTable'
+import CategoryPicker from './CategoryPicker'
 
 function formatDate(dateStr) {
   if (!dateStr) return ''
@@ -28,6 +30,11 @@ export default function ExpenseCard({ expense, onDelete, onEdit, showDate = true
   // A hand-picked emoji wins; otherwise the description is re-read every time,
   // so editing the text updates the icon.
   const icon = expense.emoji || categoryEmoji(expense.description)
+  // Where this expense sits in the report, shown on the card itself so the
+  // categorisation is visible where the expense is — and correctable there
+  // too, which is what retired the old "Fix a category" list under Reports.
+  const label = labelFor(expense)
+  const [showCategory, setShowCategory] = useState(false)
 
   let splitLabel
   if (unequal) {
@@ -56,14 +63,12 @@ export default function ExpenseCard({ expense, onDelete, onEdit, showDate = true
     <div
       className="card"
       style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
         background: color.tint,
         borderLeft: `4px solid ${color.accent}`,
         cursor: draggable ? 'grab' : undefined,
       }}
     >
+     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 2 }}>
           <span style={{ marginRight: 6 }} aria-hidden="true">{icon}</span>
@@ -127,6 +132,32 @@ export default function ExpenseCard({ expense, onDelete, onEdit, showDate = true
           </button>
         )}
       </div>
+     </div>
+
+      {/* The card's footing: the space under the amount, which was empty. A
+          dashed chip is still only a guess; a solid one is somebody's
+          decision. Either way, tapping it changes the heading — the same
+          write the Reports tab used to own. */}
+      <div
+        className="expense-card-foot"
+        onPointerDown={draggable ? (e) => e.stopPropagation() : undefined}
+      >
+        <button
+          type="button"
+          className={`category-chip ${label.stored ? 'set' : 'guessed'}`}
+          onClick={() => setShowCategory(true)}
+          title={label.stored
+            ? `${label.category.label} · ${label.sub.label} — tap to change`
+            : `Guessed from the description — tap to set it`}
+        >
+          <span className="category-chip-emoji" aria-hidden="true">{label.sub.emoji}</span>
+          {label.sub.label}
+        </button>
+      </div>
+
+      {showCategory && (
+        <CategoryPicker expense={expense} onClose={() => setShowCategory(false)} />
+      )}
     </div>
   )
 }

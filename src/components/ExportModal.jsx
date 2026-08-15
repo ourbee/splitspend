@@ -89,8 +89,9 @@ export default function ExportModal({ onClose, onOpenDiary }) {
         </div>
         <p style={{ color: 'var(--color-text-muted)', fontSize: 12, marginTop: 12 }}>
           The diary is a keepsake page — the day-by-day story with notes and
-          events, then an invoice-style statement. Print it, save it as a PDF,
-          or keep the file.
+          events, then an invoice-style statement. Inside you can have it
+          written up in words, put it oldest-first or newest-first, and choose
+          a compact layout that prints in far fewer pages.
         </p>
       </div>
     </div>

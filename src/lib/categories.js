@@ -15,7 +15,7 @@
 // icons stay as specific as they were before the taxonomy existed: a beer is
 // still 🍻 rather than a generic 🍽️.
 
-import { TAXONOMY, DEFAULT_SUB, OTHER_CATEGORY } from './taxonomy'
+import { TAXONOMY, DEFAULT_SUB, OTHER_CATEGORY, resolveLabel } from './taxonomy'
 
 function escapeRegex(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -64,4 +64,24 @@ export function guessLabelStrings(description) {
 /** Back-compat: the emoji a card falls back to when nobody picked one. */
 export function categoryEmoji(description) {
   return guessLabel(description).sub.emoji
+}
+
+/**
+ * Where an expense currently sits — a stored label if it has one, the offline
+ * guess if it doesn't.
+ *
+ * `stored` is the difference between "this is where it belongs" and "this is
+ * where it landed": the chip on a card draws the second one dashed, so a
+ * guess never poses as a decision. Note that this deliberately does NOT ask
+ * Gemini. A card shows a category the instant it renders, offline, on every
+ * expense in the trip; the batched model pass still happens once, when the
+ * Reports tab is opened, and firms up whatever the keywords couldn't place.
+ */
+export function labelFor(expense) {
+  if (expense?.category) {
+    const { category, sub } = resolveLabel(expense.category, expense.subcategory)
+    return { category, sub, stored: true }
+  }
+  const { category, sub } = guessLabel(expense?.description)
+  return { category, sub, stored: false }
 }

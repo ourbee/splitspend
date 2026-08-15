@@ -4,11 +4,16 @@
  */
 
 import useTripStore from '../store/tripStore'
+import { experienceEmoji, experienceStyle } from '../lib/experiences'
 
 /**
  * A diary moment rather than a transaction: no amount, no payer, no splits.
- * Deliberately styled apart from expense cards — flat surface, dashed border,
- * no person tint — so the timeline reads as "money, money, memory, money".
+ *
+ * Still deliberately styled apart from expense cards, but no longer plain. An
+ * expense wears the payer's colour — cool, saturated, per-person. An event
+ * wears the register its own words put it in: parchment tints and a stripe
+ * keyed to what happened, not to who paid. The dashed outline stays as the
+ * shared signature of "this one isn't money".
  */
 export default function EventCard({ event, onDelete, onEdit, draggable = false }) {
   const participants = useTripStore((s) => s.participants)
@@ -16,19 +21,43 @@ export default function EventCard({ event, onDelete, onEdit, draggable = false }
     ? participants.find((p) => p.id === event.created_by)
     : null
 
+  // A hand-picked emoji wins; otherwise the title is re-read every time, so
+  // editing the words updates both the icon and the colour with them.
+  const icon = event.emoji || experienceEmoji(event.title)
+  const register = experienceStyle(event)
+
   return (
-    <div className="event-card" style={{ cursor: draggable ? 'grab' : undefined }}>
-      <span className="event-card-emoji" aria-hidden="true">{event.emoji || '📍'}</span>
+    <div
+      className="event-card"
+      style={{
+        background: register.tint,
+        borderColor: `${register.accent}55`,
+        boxShadow: `inset 5px 0 0 ${register.accent}`,
+        cursor: draggable ? 'grab' : undefined,
+      }}
+    >
+      <span
+        className="event-card-emoji"
+        style={{ background: `${register.accent}22` }}
+        aria-hidden="true"
+      >
+        {icon}
+      </span>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontWeight: 600, fontSize: 15 }}>{event.title}</div>
         {event.note && (
           <div className="expense-note" style={{ marginTop: 2 }}>{event.note}</div>
         )}
-        {adder && (
-          <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2, opacity: 0.8 }}>
-            Added by {adder.emoji || ''} {adder.name}
-          </div>
-        )}
+        <div className="event-card-foot">
+          {adder && (
+            <span style={{ opacity: 0.8 }}>Added by {adder.emoji || ''} {adder.name}</span>
+          )}
+          {/* The register, named quietly — the same small-type footing the
+              expense cards carry their category in. */}
+          <span className="event-register" style={{ color: register.accent }}>
+            {register.label}
+          </span>
+        </div>
       </div>
       {/* The drag listeners sit on the whole card, so the buttons swallow the
           pointer press to stop a long press on them starting a drag. */}

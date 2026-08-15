@@ -600,8 +600,10 @@ body {
   box-shadow: var(--shadow-modal);
 }
 
-/* Diary events — deliberately NOT an expense card: flat surface, dashed
-   outline, no person tint, no left stripe. */
+/* Diary events — deliberately NOT an expense card. The dashed outline is the
+   shared signature of "this one isn't money"; the parchment fill and the inset
+   stripe come from the event's own register (see lib/experiences.js) and are
+   set inline, since they follow what the title says rather than who paid. */
 .event-card {
   display: flex;
   align-items: flex-start;
@@ -610,12 +612,95 @@ body {
   border: 1.5px dashed var(--color-border);
   border-radius: var(--radius-lg);
   padding: var(--space-md);
+  padding-left: calc(var(--space-md) + 4px);
 }
 
 .event-card-emoji {
-  font-size: 22px;
-  line-height: 1.2;
+  font-size: 20px;
+  line-height: 1;
   flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* The expense card's footing — the empty space under the amount. The chip is
+   deliberately the smallest type on the card: it is a label, not a headline. */
+.expense-card-foot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 6px;
+}
+
+.category-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 2px 9px;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.55);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Dashed: still only a guess from the description. Solid: somebody chose it. */
+.category-chip.guessed {
+  border: 1px dashed var(--color-border);
+}
+
+.category-chip.set {
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+}
+
+.category-chip:hover,
+.category-chip:focus-visible {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.category-chip-emoji {
+  font-size: 10px;
+}
+
+.event-card-foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+/* The name gives way, not the register: an "Added by" that has run out of
+   room is ellipsised rather than wrapping the row onto two lines. */
+.event-card-foot > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.event-register {
+  flex-shrink: 0;
+  margin-left: auto;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: lowercase;
+  opacity: 0.85;
 }
 
 /* Bill scan trigger beside the note box */
@@ -774,6 +859,9 @@ body {
    Reports
    --------------------------------------------------------------- */
 .card-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
   font-size: 14px;
   font-weight: 600;
   margin-bottom: 12px;
@@ -916,12 +1004,37 @@ body {
   white-space: nowrap;
 }
 
+/* A row is a button now: tapping one opens the expenses behind it. Styled to
+   stay a row rather than announce itself as a control — the whole breakdown
+   would turn into a wall of buttons otherwise. */
 .report-sub-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 3px 0 3px 18px;
+  width: 100%;
+  padding: 4px 6px 4px 18px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-family: inherit;
   font-size: 12.5px;
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.report-sub-row:hover,
+.report-sub-row:focus-visible {
+  background: var(--color-bg);
+}
+
+.report-sub-row.open {
+  background: var(--color-primary-light);
+}
+
+.report-sub-row.open .report-sub-name {
+  color: var(--color-primary);
+  font-weight: 600;
 }
 
 .report-sub-name {
@@ -1026,6 +1139,18 @@ body {
   border-color: var(--color-primary);
 }
 
+.report-picker-chip.selected {
+  border-color: var(--color-primary);
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.report-picker-chip:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
 /* Trip diary preview — full-screen, with the page itself in an iframe */
 .diary-overlay {
   position: fixed;
@@ -1062,6 +1187,78 @@ body {
   font-weight: 600;
   padding: 8px 14px;
   cursor: pointer;
+}
+
+/* How the diary is assembled: density, day order, and the written summary.
+   Wraps rather than scrolls — on a 375px phone the three controls do not fit
+   on one line, and a control that has scrolled off the edge is a control
+   nobody finds. */
+.diary-options {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.diary-toggle {
+  display: flex;
+  flex-shrink: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  background: var(--color-bg);
+}
+
+.diary-toggle button {
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  padding: 6px 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.diary-toggle button.active {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.diary-summary-btn {
+  flex-shrink: 0;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-full);
+  background: var(--color-bg);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  padding: 6px 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.diary-summary-btn.has-summary {
+  border-style: solid;
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+/* "This was written before the trip changed" */
+.summary-flag {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  background: var(--color-bg);
+  border-left: 3px solid var(--color-warning, #eda100);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  margin-bottom: 10px;
 }
 
 .diary-frame {

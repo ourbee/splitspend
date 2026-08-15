@@ -11,7 +11,7 @@
 // extension" notice on open; it edits normally afterwards, and Google Docs
 // and LibreOffice take it without complaint.
 //
-// Two things that constrain how this file is written:
+// Three things that constrain how this file is written:
 //
 //   * Word's HTML importer ignores <svg>, so the donut cannot come along. The
 //     chart here is a 100%-wide table row of coloured cells — a stacked bar,
@@ -19,16 +19,27 @@
 //     reliably because table cell shading is as old as the format.
 //   * Layout has to be tables and inline attributes. Modern CSS gets dropped,
 //     so anything load-bearing is expressed the way Word 97 would have.
+//   * The running credit at the foot of every page is a REAL Word footer —
+//     an mso-element div bound to the section by `mso-footer`. This is the one
+//     place the every-page requirement is honoured exactly rather than
+//     approximated: the printable page can only fake it with a fixed element.
+//
+// Compact density folds bill rows into one line and tightens the type. It does
+// not go two-column the way the printable page does: a multi-column Word
+// section would reflow the statement tables too, and a statement that has been
+// squeezed into a half-width column is worse than a longer document.
 
 import { calculateSettlements } from './settlement'
 import { calculatePersonTotals } from './personTotals'
 import { currencySymbol } from './currency'
 import { categoryEmoji } from './categories'
+import { experienceEmoji } from './experiences'
 import { groupByDay, formatDay } from './dates'
 import { sortExpenses } from './expenseOrder'
 import { round2 } from './splits'
 import { buildReport } from './reportData'
 import { percentLabel } from './donutGeometry'
+import { FOOTER_TEXT } from './attribution'
 
 const esc = (s) =>
   String(s ?? '')
@@ -40,20 +51,48 @@ const esc = (s) =>
 const money = (symbol, n) =>
   `${symbol}${Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
-export function buildDiaryDoc(trip, participants, expenses, events, settlementRecords) {
+const COMPACT_BILL_CHARS = 110
+
+function compactBillLine(items) {
+  const names = items.map((li) => li?.name).filter(Boolean)
+  if (!names.length) return ''
+  let line = names.join(' · ')
+  if (line.length > COMPACT_BILL_CHARS) {
+    line = `${line.slice(0, COMPACT_BILL_CHARS).replace(/[\s·]+\S*$/, '')}…`
+  }
+  return `<br><span style="font-size:8.5pt;color:#64748b">${names.length} items · ${esc(line)}</span>`
+}
+
+export function buildDiaryDoc(
+  trip, participants, expenses, events, settlementRecords,
+  { order = 'forward', density = 'full' } = {}
+) {
   const symbol = currencySymbol(trip.currency)
   const getP = (id) => participants.find((p) => p.id === id)
   const name = (id) => getP(id)?.name || 'Unknown'
+  const compact = density === 'compact'
+  const bodySize = compact ? '9.5pt' : '11pt'
+  const metaSize = compact ? '8pt' : '9pt'
 
   const items = sortExpenses([...expenses, ...events])
-  const groups = groupByDay(items).slice().reverse()
+  const forward = order !== 'reverse'
+  const allGroups = groupByDay(items)
+  const groups = forward ? allGroups.slice().reverse() : allGroups
 
   const grandTotal = round2(expenses.reduce((s, e) => s + Number(e.amount), 0))
   const totals = calculatePersonTotals(participants, expenses)
   const { balances, settlements } = calculateSettlements(participants, expenses, settlementRecords)
   const report = buildReport(expenses)
 
-  // ---- Reports, first ----------------------------------------------------
+  // ---- The written summary, when there is one ----------------------------
+  const summaryBlock = trip.summary
+    ? trip.summary
+        .split(/\n{2,}/)
+        .map((para) => `<p align="justify">${esc(para.trim())}</p>`)
+        .join('')
+    : ''
+
+  // ---- Reports -----------------------------------------------------------
   // One row, one cell per category, widths in percent. Slices under 2% are
   // dropped from the bar rather than becoming an invisible sliver that Word
   // rounds up to a whole column; the table below still lists them in full.
@@ -104,13 +143,14 @@ export function buildDiaryDoc(trip, participants, expenses, events, settlementRe
 
   // ---- The day-by-day story ---------------------------------------------
   const dayBlocks = groups.map((group) => {
-    const rows = group.expenses.slice().reverse().map((item) => {
+    const dayItems = forward ? group.expenses.slice().reverse() : group.expenses
+    const rows = dayItems.map((item) => {
       if (item._type === 'event') {
         return `
           <tr>
             <td width="70%" style="padding:3pt 0">
-              <i>${esc(item.emoji || '📍')} ${esc(item.title)}</i>
-              ${item.note ? `<br><span style="font-size:9pt;color:#475569">${esc(item.note)}</span>` : ''}
+              <i>${esc(item.emoji || experienceEmoji(item.title))} ${esc(item.title)}</i>
+              ${item.note ? `<br><span style="font-size:${metaSize};color:#475569">${esc(item.note)}</span>` : ''}
             </td>
             <td align="right" style="padding:3pt 0">&nbsp;</td>
           </tr>`
@@ -122,16 +162,21 @@ export function buildDiaryDoc(trip, participants, expenses, events, settlementRe
         .join(' · ')
 
       // Bill rows travel into the document as a nested table so they stay
-      // editable — the whole point of handing over a Word file.
+      // editable — the whole point of handing over a Word file. Compact folds
+      // them to a single line instead.
       const billRows = (item.line_items || []).map((li) => `
         <tr>
-          <td style="font-size:9pt;color:#475569">${esc(li.name)}</td>
-          <td align="right" style="font-size:9pt;color:#475569">${esc(li.qty ?? '')}</td>
-          <td align="right" style="font-size:9pt;color:#475569">${li.unit_price != null ? money(symbol, li.unit_price) : ''}</td>
-          <td align="right" style="font-size:9pt;color:#475569">${li.amount != null ? money(symbol, li.amount) : ''}</td>
+          <td style="font-size:${metaSize};color:#475569">${esc(li.name)}</td>
+          <td align="right" style="font-size:${metaSize};color:#475569">${esc(li.qty ?? '')}</td>
+          <td align="right" style="font-size:${metaSize};color:#475569">${li.unit_price != null ? money(symbol, li.unit_price) : ''}</td>
+          <td align="right" style="font-size:${metaSize};color:#475569">${li.amount != null ? money(symbol, li.amount) : ''}</td>
         </tr>`).join('')
 
-      const bill = billRows ? `
+      let bill = ''
+      if (compact) {
+        bill = compactBillLine(item.line_items || [])
+      } else if (billRows) {
+        bill = `
         <table width="100%" cellspacing="0" cellpadding="2" border="0" style="margin-top:3pt">
           <tr>
             <td style="font-size:8pt;color:#94a3b8">ITEM</td>
@@ -140,14 +185,15 @@ export function buildDiaryDoc(trip, participants, expenses, events, settlementRe
             <td align="right" style="font-size:8pt;color:#94a3b8">AMOUNT</td>
           </tr>
           ${billRows}
-        </table>` : ''
+        </table>`
+      }
 
       return `
         <tr>
           <td width="70%" style="padding:3pt 0">
             <b>${esc(icon)} ${esc(item.description)}</b><br>
-            <span style="font-size:9pt;color:#64748b">Paid by ${esc(name(item.paid_by))} · Split: ${shares}</span>
-            ${item.note ? `<br><span style="font-size:9pt;color:#475569">${esc(item.note)}</span>` : ''}
+            <span style="font-size:${metaSize};color:#64748b">Paid by ${esc(name(item.paid_by))} · Split: ${shares}</span>
+            ${item.note ? `<br><span style="font-size:${metaSize};color:#475569">${esc(item.note)}</span>` : ''}
             ${bill}
           </td>
           <td align="right" valign="top" style="padding:3pt 0"><b>${money(symbol, item.amount)}</b></td>
@@ -199,14 +245,17 @@ export function buildDiaryDoc(trip, participants, expenses, events, settlementRe
       ).join('')}
     </table>` : ''
 
+  const first = groups.length ? groups[0].key : null
+  const last = groups.length ? groups[groups.length - 1].key : null
   const dateRange = groups.length
     ? (groups.length === 1
-        ? formatDay(groups[0].key)
-        : `${formatDay(groups[0].key)} — ${formatDay(groups[groups.length - 1].key)}`)
+        ? formatDay(first)
+        : (forward ? `${formatDay(first)} — ${formatDay(last)}` : `${formatDay(last)} — ${formatDay(first)}`))
     : ''
 
   // The xmlns declarations and the ProgId meta are what make Word treat this
-  // as its own document rather than a web page pasted into one.
+  // as its own document rather than a web page pasted into one. Section1 plus
+  // `mso-footer:f1` is what binds the credit line to every page.
   return `<html xmlns:o="urn:schemas-microsoft-com:office:office"
       xmlns:w="urn:schemas-microsoft-com:office:word"
       xmlns="http://www.w3.org/TR/REC-html40">
@@ -218,18 +267,36 @@ export function buildDiaryDoc(trip, participants, expenses, events, settlementRe
   <w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument>
 </xml><![endif]-->
 <style>
-  @page { size: A4; margin: 16mm; }
-  body { font-family: Georgia, 'Times New Roman', serif; font-size: 11pt; color: #1e293b; }
-  h1 { font-size: 20pt; text-align: center; margin-bottom: 2pt; }
-  h2 { font-size: 14pt; margin-top: 16pt; }
-  h3 { font-size: 11pt; margin-top: 12pt; }
+  @page Section1 {
+    size: 595.3pt 841.9pt;
+    margin: ${compact ? '38pt' : '45.35pt'};
+    mso-header-margin: 35.4pt;
+    mso-footer-margin: 24pt;
+    mso-paper-source: 0;
+    mso-footer: f1;
+  }
+  div.Section1 { page: Section1; }
+  body { font-family: Georgia, 'Times New Roman', serif; font-size: ${bodySize}; color: #1e293b; }
+  h1 { font-size: ${compact ? '17pt' : '20pt'}; text-align: center; margin-bottom: 2pt; }
+  h2 { font-size: ${compact ? '12.5pt' : '14pt'}; margin-top: ${compact ? '12pt' : '16pt'}; }
+  h3 { font-size: ${compact ? '10pt' : '11pt'}; margin-top: ${compact ? '9pt' : '12pt'}; }
   td { vertical-align: top; }
+  p.MsoFooter {
+    margin: 0;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 8pt;
+    color: #94a3b8;
+    text-align: center;
+  }
 </style>
 </head>
 <body>
+<div class="Section1">
   <h1>${esc(trip.name)}</h1>
   ${dateRange ? `<p align="center" style="color:#64748b">${esc(dateRange)}</p>` : ''}
   <p align="center">${participants.map((p) => esc(`${p.emoji || ''} ${p.name}`.trim())).join(' · ')}</p>
+
+  ${summaryBlock}
 
   ${reportBlock}
 
@@ -252,16 +319,17 @@ export function buildDiaryDoc(trip, participants, expenses, events, settlementRe
 
   ${historyBlock}
 
-  <p align="center" style="color:#94a3b8;font-size:9pt;margin-top:24pt">
-    Exported from Splitspend · ${new Date().toLocaleDateString()}
-  </p>
+  <div style="mso-element:footer" id="f1">
+    <p class="MsoFooter">${esc(FOOTER_TEXT)}</p>
+  </div>
+</div>
 </body>
 </html>`
 }
 
 /** Download the diary as an editable Word file. */
-export function downloadDiaryDoc(trip, participants, expenses, events, settlementRecords) {
-  const html = buildDiaryDoc(trip, participants, expenses, events, settlementRecords)
+export function downloadDiaryDoc(trip, participants, expenses, events, settlementRecords, options) {
+  const html = buildDiaryDoc(trip, participants, expenses, events, settlementRecords, options)
   const blob = new Blob(['﻿', html], { type: 'application/msword' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')

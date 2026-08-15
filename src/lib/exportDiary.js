@@ -3,22 +3,32 @@
  * https://github.com/ourbee
  */
 
-// "Trip Diary" export: a printable page — day-by-day story of expenses and
-// diary events, followed by an invoice-style statement (per-person totals,
-// net balances, settlements). Rendered into an in-app iframe rather than a
-// new tab: phone browsers block window.open often enough that a pop-up would
-// make the feature look broken. Fully client-side; nothing leaves the device.
+// "Trip Diary" export: a printable page — an optional written summary, the
+// report, a day-by-day story of expenses and diary events, then an
+// invoice-style statement (per-person totals, net balances, settlements).
+// Rendered into an in-app iframe rather than a new tab: phone browsers block
+// window.open often enough that a pop-up would make the feature look broken.
+// Fully client-side; nothing leaves the device.
+//
+// Two options travel in from the diary screen:
+//   order    'forward' (oldest day first, how a diary reads) or 'reverse'
+//            (newest first, how the app's list reads)
+//   density  'full' or 'compact' — compact is a print layout, not a different
+//            diary: two columns, tighter type, and bill line items folded to a
+//            single line. On a long trip it roughly halves the page count.
 
 import { calculateSettlements } from './settlement'
 import { calculatePersonTotals } from './personTotals'
 import { currencySymbol } from './currency'
 import { categoryEmoji } from './categories'
+import { experienceEmoji } from './experiences'
 import { groupByDay, formatDay } from './dates'
 import { sortExpenses } from './expenseOrder'
 import { round2 } from './splits'
 import { buildReport } from './reportData'
 import { renderDonutSvg } from './donutSvg'
 import { percentLabel } from './donutGeometry'
+import { FOOTER_HTML } from './attribution'
 
 const esc = (s) =>
   String(s ?? '')
@@ -30,25 +40,49 @@ const esc = (s) =>
 const money = (symbol, n) =>
   `${symbol}${Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
-export function buildDiaryHtml(trip, participants, expenses, events, settlementRecords) {
+// A compact bill is the dish names on one line — what was eaten survives, the
+// per-row arithmetic doesn't. Long lists are cut rather than wrapped over four
+// lines, since the full table is a Full-density export away.
+const COMPACT_BILL_CHARS = 110
+
+function compactBill(items) {
+  const names = items.map((li) => li?.name).filter(Boolean)
+  if (!names.length) return ''
+
+  let line = names.join(' · ')
+  if (line.length > COMPACT_BILL_CHARS) {
+    line = `${line.slice(0, COMPACT_BILL_CHARS).replace(/[\s·]+\S*$/, '')}…`
+  }
+  const count = `${names.length} item${names.length === 1 ? '' : 's'}`
+  return `<div class="bill-line"><span class="bill-count">${count}</span> ${esc(line)}</div>`
+}
+
+export function buildDiaryHtml(
+  trip, participants, expenses, events, settlementRecords,
+  { order = 'forward', density = 'full' } = {}
+) {
   const symbol = currencySymbol(trip.currency)
   const getP = (id) => participants.find((p) => p.id === id)
   const name = (id) => getP(id)?.name || 'Unknown'
+  const compact = density === 'compact'
 
   const items = sortExpenses([...expenses, ...events])
-  // The list is newest-first for the app; a diary reads oldest-first.
-  const groups = groupByDay(items).slice().reverse()
+  // The list arrives newest-first, which is how the app reads. A diary reads
+  // oldest-first, so 'forward' reverses both the days and each day's contents.
+  const forward = order !== 'reverse'
+  const allGroups = groupByDay(items)
+  const groups = forward ? allGroups.slice().reverse() : allGroups
 
   const grandTotal = round2(expenses.reduce((s, e) => s + Number(e.amount), 0))
   const totals = calculatePersonTotals(participants, expenses)
   const { balances, settlements } = calculateSettlements(participants, expenses, settlementRecords)
 
   const dayBlocks = groups.map((group) => {
-    const dayItems = group.expenses.slice().reverse().map((item) => {
+    const dayItems = (forward ? group.expenses.slice().reverse() : group.expenses).map((item) => {
       if (item._type === 'event') {
         return `
         <div class="entry event">
-          <span class="entry-emoji">${esc(item.emoji || '📍')}</span>
+          <span class="entry-emoji">${esc(item.emoji || experienceEmoji(item.title))}</span>
           <div class="entry-body">
             <div class="entry-title">${esc(item.title)}</div>
             ${item.note ? `<div class="entry-note">${esc(item.note)}</div>` : ''}
@@ -70,11 +104,16 @@ export function buildDiaryHtml(trip, participants, expenses, events, settlementR
           <td class="num">${li.amount != null ? money(symbol, li.amount) : ''}</td>
         </tr>`).join('')
 
-      const bill = billRows ? `
+      let bill = ''
+      if (compact) {
+        bill = compactBill(item.line_items || [])
+      } else if (billRows) {
+        bill = `
         <table class="bill">
           <tr><th>Item</th><th class="num">Qty</th><th class="num">Rate</th><th class="num">Amount</th></tr>
           ${billRows}
-        </table>` : ''
+        </table>`
+      }
 
       return `
         <div class="entry">
@@ -133,7 +172,14 @@ export function buildDiaryHtml(trip, participants, expenses, events, settlementR
       ).join('')}
     </table>` : ''
 
-  // The report leads the diary: the shape of the trip's spending first, the
+  // The written summary, when there is one, opens the diary: the trip in
+  // words before the trip in numbers.
+  const summaryBlock = trip.summary ? `
+  <section class="summary">
+    ${trip.summary.split(/\n{2,}/).map((para) => `<p>${esc(para.trim())}</p>`).join('')}
+  </section>` : ''
+
+  // The report leads the days: the shape of the trip's spending first, the
   // day-by-day story after it, the statement last.
   const report = buildReport(expenses)
   const donut = renderDonutSvg(report, symbol)
@@ -165,10 +211,12 @@ export function buildDiaryHtml(trip, participants, expenses, events, settlementR
     </table>
   </section>` : ''
 
+  const first = groups.length ? groups[0].key : null
+  const last = groups.length ? groups[groups.length - 1].key : null
   const dateRange = groups.length
     ? (groups.length === 1
-        ? formatDay(groups[0].key)
-        : `${formatDay(groups[0].key)} — ${formatDay(groups[groups.length - 1].key)}`)
+        ? formatDay(first)
+        : (forward ? `${formatDay(first)} — ${formatDay(last)}` : `${formatDay(last)} — ${formatDay(first)}`))
     : ''
 
   return `<!doctype html>
@@ -191,6 +239,9 @@ export function buildDiaryHtml(trip, participants, expenses, events, settlementR
   header h1 { font-size: 30px; margin-bottom: 4px; }
   header .sub { color: #64748b; font-size: 14px; }
   header .people { margin-top: 10px; font-size: 14px; }
+  .summary { margin-bottom: 34px; break-inside: avoid-page; }
+  .summary p { font-size: 15px; text-align: justify; hyphens: auto; }
+  .summary p + p { margin-top: 10px; }
   .day { margin-bottom: 26px; break-inside: avoid-page; }
   .day h2 {
     font-size: 15px;
@@ -209,8 +260,18 @@ export function buildDiaryHtml(trip, participants, expenses, events, settlementR
     font-style: italic;
   }
   .entry-emoji { flex-shrink: 0; font-size: 17px; line-height: 1.4; }
-  .entry-title { font-weight: 600; font-size: 15px; }
-  .entry-amount { float: right; font-weight: 700; }
+  /* A row rather than a float: the amount used to be floated, and in a narrow
+     column — which is exactly what Compact's two-column print produces — the
+     "Paid by / Split" line flowed underneath it and collided. */
+  .entry-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+    font-weight: 600;
+    font-size: 15px;
+  }
+  .entry-amount { flex-shrink: 0; font-weight: 700; }
   .entry-body { flex: 1; min-width: 0; }
   .entry-meta { font-size: 12.5px; color: #64748b; }
   .entry-note { font-size: 13px; color: #475569; margin-top: 2px; white-space: pre-wrap; }
@@ -218,6 +279,14 @@ export function buildDiaryHtml(trip, participants, expenses, events, settlementR
   .bill th, .bill td { font-size: 12px; color: #475569; padding: 2px 10px 2px 0; border-bottom: none; }
   .bill th { font-size: 10px; color: #94a3b8; }
   .bill tr:first-child th { border-bottom: 1px solid #e2e8f0; }
+  .bill-line { font-size: 12px; color: #475569; margin-top: 3px; }
+  .bill-count {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #94a3b8;
+    margin-right: 5px;
+  }
   .report { margin-bottom: 40px; break-inside: avoid-page; }
   .report h2 { font-size: 18px; margin-bottom: 14px; }
   .chart { text-align: center; margin-bottom: 10px; }
@@ -240,28 +309,78 @@ export function buildDiaryHtml(trip, participants, expenses, events, settlementR
   .num { text-align: right; white-space: nowrap; }
   .muted { color: #94a3b8; font-size: 12px; }
   .grand { margin: 14px 0 4px; font-size: 15px; font-weight: 700; text-align: right; }
-  footer { margin-top: 40px; text-align: center; font-size: 12px; color: #94a3b8; }
+
+  /* The credit line. On screen it simply ends the page; in print it is fixed
+     to the bottom of the sheet, which is how a browser repeats an element on
+     every page — there is no other lever for a running footer in plain CSS. */
+  .credit {
+    margin-top: 40px;
+    padding-top: 10px;
+    border-top: 1px solid #e2e8f0;
+    text-align: center;
+    font-size: 11px;
+    color: #94a3b8;
+  }
+  .credit a { color: inherit; text-decoration: none; }
+
   /* Zero page margin, with the inset moved onto the body below, so that the
      browser has nowhere to draw its own print header and footer — which is
-     where the trip's URL was being stamped onto every printed sheet. There is
-     no CSS that switches those off directly; denying them the margin box is
-     the only lever a page has. */
+     where the trip's URL and the printing time were being stamped onto every
+     sheet. There is no CSS that switches those off directly; denying them the
+     margin box is the only lever a page has, and it works in Chrome and
+     Edge. iOS Safari draws its AirPrint header outside the page box entirely,
+     where no stylesheet reaches — on an iPhone, turn it off in the print
+     dialog's own options. */
   @page { margin: 0; }
   @media print {
-    body { max-width: none; padding: 16mm; }
+    body { max-width: none; padding: 16mm 16mm 22mm; }
+
+    .credit {
+      position: fixed;
+      left: 16mm;
+      right: 16mm;
+      bottom: 8mm;
+      margin: 0;
+      background: #fff;
+    }
+
+    /* Compact: two columns for the day-by-day story only. The report and the
+       statement are tables and stay full width, where their columns line up. */
+    body.compact { font-size: 13px; }
+    body.compact .days {
+      column-count: 2;
+      column-gap: 10mm;
+    }
+    body.compact .day { margin-bottom: 16px; }
+    body.compact .day h2 { font-size: 13px; margin-bottom: 8px; }
+    body.compact .entry { gap: 7px; margin-bottom: 8px; }
+    body.compact .entry-title { font-size: 13px; }
+    body.compact .entry-emoji { font-size: 14px; }
+    body.compact .entry-meta { font-size: 10.5px; }
+    body.compact .entry-note { font-size: 11px; }
+    body.compact .bill-line { font-size: 10.5px; }
+    body.compact header { margin-bottom: 22px; }
+    body.compact .summary { margin-bottom: 24px; }
+    body.compact .summary p { font-size: 13px; }
+    body.compact .report { margin-bottom: 26px; }
+    body.compact .statement { margin-top: 26px; }
   }
 </style>
 </head>
-<body>
+<body class="${compact ? 'compact' : 'full'}">
   <header>
     <h1>${esc(trip.name)}</h1>
     ${dateRange ? `<div class="sub">${esc(dateRange)}</div>` : ''}
     <div class="people">${participants.map((p) => esc(`${p.emoji || ''} ${p.name}`.trim())).join(' · ')}</div>
   </header>
 
+  ${summaryBlock}
+
   ${reportBlock}
 
-  ${dayBlocks || '<p style="text-align:center;color:#64748b">Nothing here yet.</p>'}
+  <div class="days">
+    ${dayBlocks || '<p style="text-align:center;color:#64748b">Nothing here yet.</p>'}
+  </div>
 
   <div class="statement">
     <h2>Statement</h2>
@@ -278,9 +397,7 @@ export function buildDiaryHtml(trip, participants, expenses, events, settlementR
     ${historyBlock}
   </div>
 
-  <footer>
-    Exported from Splitspend · ${new Date().toLocaleDateString()}
-  </footer>
+  <div class="credit">${FOOTER_HTML}</div>
 </body>
 </html>`
 }

@@ -202,6 +202,40 @@ const useTripStore = create((set, get) => ({
     return data ?? 0
   },
 
+  /**
+   * Save (or clear) the trip's written summary.
+   *
+   * Applied to local state FIRST and on purpose: the paragraph has already
+   * been written and the person is looking at it. If the write fails — an old
+   * server without the v8 RPC, a dropped connection — the diary still shows
+   * what was written, and the caller reports that it wasn't stored. Losing the
+   * text as well would be the worse trade.
+   */
+  setTripSummary: async (tripId, summary, hash = null) => {
+    if (!supabase) throw new Error('Supabase not configured')
+
+    const text = summary?.trim() ? summary.trim() : null
+    set((state) => (state.trip?.id === tripId
+      ? {
+          trip: {
+            ...state.trip,
+            summary: text,
+            summary_hash: text ? hash : null,
+            summary_at: text ? new Date().toISOString() : null,
+          },
+        }
+      : {}))
+
+    const { error } = await supabase.rpc('set_trip_summary_v8', {
+      p_trip_id: tripId,
+      p_summary: text,
+      p_hash: hash,
+    })
+    if (error) throw error
+
+    broadcastRefresh(tripId)
+  },
+
   // Applied locally first so the card stays where it was dropped; the server
   // rebalances the day's spacing if the midpoints ever get too tight, and the
   // refetch picks that up.

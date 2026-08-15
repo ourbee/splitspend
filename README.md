@@ -25,8 +25,9 @@ accounts, no logins, no app install.
   "Continue as *you*" picks up exactly where you left off.
 - **Your data, your export.** Every group can be exported to CSV/JSON, or
   printed as a Trip Diary, at any time.
-- **No photo storage.** Bills can be scanned for their text, but the image is
-  read once and thrown away — never saved, never attached to an expense.
+- **No photo storage.** Bills, tickets and boarding passes can be scanned for
+  their text, but the image is read once and thrown away — never saved, never
+  attached to anything.
 
 ## Features
 
@@ -50,13 +51,30 @@ accounts, no logins, no app install.
   subcategory breakdown underneath. Categories come from a fixed list matched
   offline by keyword first, with one batched model call for the leftovers;
   **the model only ever picks labels, and every figure is summed in the
-  browser.** Any expense can be re-categorised by hand
+  browser.** Tap a subcategory and the expenses inside it open underneath.
+  Every expense card carries its own category chip — dashed while
+  it is still a guess, solid once somebody has chosen — and tapping it moves
+  the expense to a different heading
 - **Non-expense events** — "Sunset at Anjuna", "Train to Goa" — added from the
-  same + button, shown as distinct cards, ignored by all money maths
-- **Trip Diary export** — a printable keepsake that opens with the category
-  report, then the day-by-day story with notes, bill items and events, and
-  closes with an invoice-style statement. Print/PDF, or download it as an
-  editable Word document
+  same + button, and given a register of their own: a parchment tint, an
+  accent stripe and an emoji read out of an experience lexicon (temple, trek,
+  sunset, boarding, checkin, birthday, rained…), all ignored by every money
+  calculation. A photographed **boarding pass, ticket or booking** can be read
+  into one the way a bill is read into an expense — text only, no image kept,
+  and never a price
+- **Trip Diary export** — a printable keepsake that opens with an optional
+  written summary, then the category report, then the day-by-day story with
+  notes, bill items and events, and closes with an invoice-style statement.
+  Choose **Full or Compact** (two print columns and folded bill rows, for far
+  fewer pages) and **oldest-first or newest-first**. Print/PDF, or download it
+  as an editable Word document. Every page carries the app address and its
+  author — and never the group's own link
+- **The trip in words** — one button asks a model to write ~500 words of
+  plain, everyday English about the trip, from your own days, notes and bills.
+  Every figure it may use is computed in the browser and handed to it; no
+  participant name is ever sent, so the passage speaks as "we". It is a draft
+  in a text box: edit it, rewrite it, or delete it, and it tells you when the
+  trip has changed since it was written
 - Soft per-person colour coding — automatic, or pick your own colour and
   emoji from the name chip; your colour also themes the buttons **on your own
   device only**
@@ -84,23 +102,29 @@ npm run dev
 
 Database setup: run `supabase-schema.sql` in the Supabase SQL editor, then
 section 3 of `supabase-migration-v4.sql` (the RPC definitions), then
-`supabase-migration-v5.sql`, `supabase-migration-v6.sql` and
-`supabase-migration-v7.sql`. Upgrading an existing v2/v3 install: run
-`supabase-migration-v4.sql`, `supabase-hardening-v4.sql`, then the v5, v6 and
-v7 migrations in order.
+`supabase-migration-v5.sql`, `supabase-migration-v6.sql`,
+`supabase-migration-v7.sql` and `supabase-migration-v8.sql`. Upgrading an
+existing v2/v3 install: run `supabase-migration-v4.sql`,
+`supabase-hardening-v4.sql`, then the v5, v6, v7 and v8 migrations in order.
 
 Each migration is additive — it adds tables, columns and new functions but
 leaves every earlier RPC untouched, so **run it before deploying the matching
 frontend**. The previous bundle keeps working while it is in place.
 
-Bill scanning and the Reports tab's category labelling both need
-`GEMINI_API_KEY` set as a server-side environment variable (Vercel project
-settings, or `.env` locally when running `vercel dev`). Without it every other
-feature works normally: the scan button reports that scanning isn't
-configured, and Reports falls back to its offline keyword matcher — the chart
-and every total still appear, because no figure on that tab was ever coming
-from a model. The key is never shipped to the browser; the image and the
-descriptions are relayed by `api/scan-receipt.js` and `api/categorise.js`.
+Bill scanning, document scanning, the Reports tab's category labelling and the
+written trip summary all need `GEMINI_API_KEY` set as a server-side
+environment variable (Vercel project settings, or `.env` locally when running
+`vercel dev`). Without it every other feature works normally: the scan buttons
+report that scanning isn't configured, the summary button says the same, and
+Reports falls back to its offline keyword matcher — the chart and every total
+still appear, because no figure on that tab was ever coming from a model. The
+key is never shipped to the browser; images, descriptions and the summary
+facts are relayed by `api/scan-receipt.js`, `api/scan-document.js`,
+`api/categorise.js` and `api/summarise.js`.
+
+`api/summarise.js` is the one function with a raised `maxDuration` (60s in
+`vercel.json`) — five hundred words of generation runs well past the platform
+default, and a cut-off request would look like a broken button.
 
 ## Version history
 
@@ -126,5 +150,13 @@ descriptions are relayed by `api/scan-receipt.js` and `api/categorise.js`.
   net-balance card used to be, a new **Reports** tab with a category donut and
   subcategory breakdown, that report leading the Trip Diary, an editable Word
   export, and no URL printed on the exported diary
+- **v8** — a written trip summary in plain English (facts computed in the
+  browser, no names sent), Full/Compact and oldest/newest-first controls on
+  the diary, a running credit line on every page of it — the app's address and
+  its author, never the group's — the category chip moved onto every expense
+  card where it can be corrected, a subcategory drill-down in Reports that
+  retired "Fix a category", diary events given their own emoji lexicon and
+  parchment registers, and boarding passes and tickets read into an event the
+  way bills are read into an expense
 
 Created by **Ritwik Balo**.

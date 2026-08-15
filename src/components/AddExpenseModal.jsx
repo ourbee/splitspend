@@ -8,8 +8,10 @@ import useTripStore from '../store/tripStore'
 import { computeEqualSplits, isUnequalSplit, round2 } from '../lib/splits'
 import { currencySymbol } from '../lib/currency'
 import { categoryEmoji } from '../lib/categories'
-import { EXPENSE_EMOJI_GROUPS } from '../lib/expenseEmojis'
+import { experienceEmoji } from '../lib/experiences'
+import { EXPENSE_EMOJI_GROUPS, EVENT_EMOJI_GROUPS } from '../lib/expenseEmojis'
 import { scanReceipt } from '../lib/receiptScan'
+import { scanDocument } from '../lib/documentScan'
 import { normaliseLineItems } from '../lib/lineItems'
 import { guessLabelStrings } from '../lib/categories'
 import EmojiPicker from './EmojiPicker'
@@ -94,7 +96,9 @@ export default function AddExpenseModal({ onClose, expense }) {
   const cameraInputRef = useRef(null)
   const galleryInputRef = useRef(null)
 
-  const guessedEmoji = isEvent ? '📍' : categoryEmoji(description)
+  // Events read their icon out of the experience lexicon, expenses out of the
+  // spending taxonomy — the same trick, two different vocabularies.
+  const guessedEmoji = isEvent ? experienceEmoji(description) : categoryEmoji(description)
   const shownEmoji = emoji || guessedEmoji
 
   const toggleParticipant = (id) => {
@@ -151,8 +155,10 @@ export default function AddExpenseModal({ onClose, expense }) {
       .filter((s) => s.share_amount > 0)
   }
 
-  // OCR a photographed bill into the note (and the empty fields), then throw
-  // the photo away — nothing but text is ever stored.
+  // OCR a photographed bill or document into the note (and the empty fields),
+  // then throw the photo away — nothing but text is ever stored, on either
+  // path. An expense reads a bill; an event reads the boarding pass, ticket or
+  // booking that the moment left behind.
   const handleScanFile = async (e) => {
     const file = e.target.files?.[0]
     e.target.value = ''
@@ -160,6 +166,31 @@ export default function AddExpenseModal({ onClose, expense }) {
 
     setScanning(true)
     setScanError(null)
+
+    if (isEvent) {
+      try {
+        const doc = await scanDocument(file)
+        if (doc.details) {
+          setNote((prev) => (prev.trim() ? `${prev.trim()}\n${doc.details}` : doc.details))
+        }
+        if (doc.title && !description.trim()) {
+          // Left on "Automatic": a title like "Flight to Hyderabad" now picks
+          // its own ✈️ out of the experience lexicon.
+          setDescription(doc.title)
+        }
+        // Only when the date is still the untouched default — a scan should
+        // never quietly move an event somebody has already placed on a day.
+        if (doc.date && expenseDate === todayStr()) setExpenseDate(doc.date)
+        if (!doc.title && !doc.details && !doc.date) {
+          setScanError('Could not read anything useful from that photo.')
+        }
+      } catch (err) {
+        setScanError(err.message)
+      }
+      setScanning(false)
+      return
+    }
+
     try {
       const result = await scanReceipt(file)
       if (result.summary || result.text) {
@@ -306,69 +337,71 @@ export default function AddExpenseModal({ onClose, expense }) {
                 onChange={(e) => setNote(e.target.value)}
                 style={{ resize: 'vertical' }}
               />
-              {!isEvent && (
-                <div style={{ position: 'relative' }}>
-                  <button
-                    type="button"
-                    className="scan-trigger"
-                    onClick={() => setShowScanChoice((v) => !v)}
-                    disabled={scanning}
-                    title="Scan a bill — the text is saved, the photo is not"
-                    aria-label="Scan a bill with the camera or from the gallery"
-                    aria-expanded={showScanChoice}
-                  >
-                    {scanning ? <span className="spinner spinner-inline" /> : '📷'}
-                  </button>
-                  {showScanChoice && (
-                    <div className="scan-choice">
-                      <button
-                        type="button"
-                        className="menu-item"
-                        onClick={() => { setShowScanChoice(false); cameraInputRef.current?.click() }}
-                      >
-                        📸 Take photo
-                      </button>
-                      <button
-                        type="button"
-                        className="menu-item"
-                        onClick={() => { setShowScanChoice(false); galleryInputRef.current?.click() }}
-                      >
-                        🖼️ Choose photo
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
+              <div style={{ position: 'relative' }}>
+                <button
+                  type="button"
+                  className="scan-trigger"
+                  onClick={() => setShowScanChoice((v) => !v)}
+                  disabled={scanning}
+                  title={isEvent
+                    ? 'Scan a ticket or boarding pass — the text is saved, the photo is not'
+                    : 'Scan a bill — the text is saved, the photo is not'}
+                  aria-label={isEvent
+                    ? 'Scan a document with the camera or from the gallery'
+                    : 'Scan a bill with the camera or from the gallery'}
+                  aria-expanded={showScanChoice}
+                >
+                  {scanning ? <span className="spinner spinner-inline" /> : '📷'}
+                </button>
+                {showScanChoice && (
+                  <div className="scan-choice">
+                    <button
+                      type="button"
+                      className="menu-item"
+                      onClick={() => { setShowScanChoice(false); cameraInputRef.current?.click() }}
+                    >
+                      📸 Take photo
+                    </button>
+                    <button
+                      type="button"
+                      className="menu-item"
+                      onClick={() => { setShowScanChoice(false); galleryInputRef.current?.click() }}
+                    >
+                      🖼️ Choose photo
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
-            {!isEvent && (
-              <>
-                {/* capture asks the OS for the camera directly, which is the
-                    only reliable way to reach it on Android. */}
-                <input
-                  ref={cameraInputRef}
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  style={{ display: 'none' }}
-                  onChange={handleScanFile}
-                />
-                <input
-                  ref={galleryInputRef}
-                  type="file"
-                  accept="image/*"
-                  style={{ display: 'none' }}
-                  onChange={handleScanFile}
-                />
-              </>
-            )}
-            {!isEvent && !scanning && !scanError && (
+            {/* capture asks the OS for the camera directly, which is the
+                only reliable way to reach it on Android. */}
+            <input
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              style={{ display: 'none' }}
+              onChange={handleScanFile}
+            />
+            <input
+              ref={galleryInputRef}
+              type="file"
+              accept="image/*"
+              style={{ display: 'none' }}
+              onChange={handleScanFile}
+            />
+            {!scanning && !scanError && (
               <p className="field-hint">
-                📷 Snap a bill or invoice and the items, prices and total are read in for you.
+                {isEvent
+                  ? '📷 Snap a boarding pass, ticket or booking and the details are read in for you. The photo is never saved — only the text.'
+                  : '📷 Snap a bill or invoice and the items, prices and total are read in for you.'}
               </p>
             )}
             {scanning && (
               <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>
-                Reading the bill… the photo itself is never saved.
+                {isEvent
+                  ? 'Reading the document… the photo itself is never saved.'
+                  : 'Reading the bill… the photo itself is never saved.'}
               </p>
             )}
             {scanError && (
@@ -570,7 +603,7 @@ export default function AddExpenseModal({ onClose, expense }) {
       {showEmojiPicker && (
         <EmojiPicker
           title="Pick an icon"
-          groups={EXPENSE_EMOJI_GROUPS}
+          groups={isEvent ? EVENT_EMOJI_GROUPS : EXPENSE_EMOJI_GROUPS}
           value={emoji}
           onPick={setEmoji}
           onPickAuto={() => setEmoji(null)}

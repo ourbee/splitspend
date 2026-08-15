@@ -8,7 +8,8 @@ import useTripStore from '../store/tripStore'
 import { currencySymbol } from '../lib/currency'
 import { buildReport } from '../lib/reportData'
 import { localLabels, remoteLabels, unlabelledExpenses } from '../lib/autoCategorise'
-import { TAXONOMY } from '../lib/taxonomy'
+import { labelFor } from '../lib/categories'
+import CategoryPicker from './CategoryPicker'
 import CategoryDonut from './CategoryDonut'
 
 /**
@@ -19,6 +20,11 @@ import CategoryDonut from './CategoryDonut'
  * ever pays that cost once. Every figure on this tab is summed in the browser
  * from the stored expense amounts; the model contributes two strings per
  * expense and nothing else.
+ *
+ * Two taps deep: a slice narrows the breakdown to one head, a subcategory row
+ * opens the expenses inside it. That list stands where "Fix a category" used
+ * to — the correction now lives on the expense card itself, and on any row
+ * here, rather than in a separate list of every expense in the trip.
  */
 export default function ReportsTab() {
   const expenses = useTripStore((s) => s.expenses)
@@ -27,9 +33,10 @@ export default function ReportsTab() {
   const symbol = currencySymbol(trip?.currency)
 
   const [selectedKey, setSelectedKey] = useState(null)
+  const [selectedSub, setSelectedSub] = useState(null) // { categoryKey, subKey }
   const [labelling, setLabelling] = useState(false)
   const [labelError, setLabelError] = useState(null)
-  const [editingId, setEditingId] = useState(null)
+  const [editing, setEditing] = useState(null) // the expense whose picker is open
   // One labelling pass per trip per mount. Without this the effect would fire
   // again on the refresh its own writes trigger.
   const attemptedRef = useRef(null)
@@ -69,17 +76,6 @@ export default function ReportsTab() {
     return () => { cancelled = true }
   }, [trip?.id, expenses, setExpenseLabels])
 
-  const handleRecategorise = async (expense, categoryLabel, subLabel) => {
-    setEditingId(null)
-    try {
-      await setExpenseLabels(trip.id, [
-        { id: expense.id, category: categoryLabel, subcategory: subLabel },
-      ])
-    } catch (err) {
-      setLabelError(err.message)
-    }
-  }
-
   if (expenses.length === 0) {
     return (
       <div className="empty-state">
@@ -96,6 +92,32 @@ export default function ReportsTab() {
     ? [selectedCategory]
     : report.categories
 
+  const chooseCategory = (key) => {
+    setSelectedKey(key)
+    setSelectedSub(null)
+  }
+
+  const toggleSub = (categoryKey, subKey) => {
+    setSelectedSub((current) =>
+      current && current.categoryKey === categoryKey && current.subKey === subKey
+        ? null
+        : { categoryKey, subKey })
+  }
+
+  // The expenses behind a subcategory row, read straight off the same labels
+  // the totals were grouped by — so what opens always sums to what was tapped.
+  const openCategory = selectedSub
+    ? report.categories.find((c) => c.key === selectedSub.categoryKey)
+    : null
+  const openSub = openCategory?.subs.find((s) => s.key === selectedSub.subKey)
+  const openExpenses = selectedSub
+    ? expenses.filter((expense) => {
+        const label = labelFor(expense)
+        return label.category.key === selectedSub.categoryKey
+          && label.sub.key === selectedSub.subKey
+      })
+    : []
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div className="card">
@@ -104,7 +126,7 @@ export default function ReportsTab() {
           report={report}
           symbol={symbol}
           selectedKey={selectedKey}
-          onSelect={setSelectedKey}
+          onSelect={chooseCategory}
         />
         {labelling && (
           <p className="report-note">
@@ -127,7 +149,7 @@ export default function ReportsTab() {
             type="button"
             className="btn-ghost"
             style={{ fontSize: 13, padding: '2px 0', marginBottom: 8, color: 'var(--color-text-muted)' }}
-            onClick={() => setSelectedKey(null)}
+            onClick={() => chooseCategory(null)}
           >
             ← All categories
           </button>
@@ -142,76 +164,89 @@ export default function ReportsTab() {
                 {symbol}{category.total.toLocaleString()}
               </span>
             </div>
-            {category.subs.map((sub) => (
-              <div key={sub.key} className="report-sub-row">
-                <span className="report-sub-name">{sub.emoji} {sub.label}</span>
-                {/* A bar rather than a second colour: this is magnitude
-                    within one head, so it stays in that head's own hue. */}
-                <span className="report-bar" aria-hidden="true">
-                  <span
-                    className="report-bar-fill"
-                    style={{ width: `${Math.max(2, sub.share * 100)}%`, background: category.color }}
-                  />
-                </span>
-                <span className="report-sub-value">
-                  {symbol}{sub.total.toLocaleString()}
-                  <span className="report-sub-count"> · {sub.count}</span>
-                </span>
-              </div>
-            ))}
-          </div>
-        ))}
-      </div>
-
-      {/* The manual override. Whatever a model decided, the last word belongs
-          to whoever is looking at the trip. */}
-      <div className="card">
-        <div className="card-heading">Fix a category</div>
-        <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 10 }}>
-          Tap an expense to move it to a different heading.
-        </p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {expenses.map((expense) => {
-            const shown = buildReport([expense]).categories[0]
-            return (
-              <div key={expense.id}>
+            {category.subs.map((sub) => {
+              const open = selectedSub
+                && selectedSub.categoryKey === category.key
+                && selectedSub.subKey === sub.key
+              return (
                 <button
+                  key={sub.key}
                   type="button"
-                  className="report-fix-row"
-                  onClick={() => setEditingId(editingId === expense.id ? null : expense.id)}
-                  aria-expanded={editingId === expense.id}
+                  className={`report-sub-row ${open ? 'open' : ''}`}
+                  onClick={() => toggleSub(category.key, sub.key)}
+                  aria-expanded={open}
                 >
-                  <span className="report-fix-name">{expense.description}</span>
-                  <span className="report-fix-tag">
-                    {shown ? `${shown.emoji} ${shown.subs[0].label}` : '—'}
+                  <span className="report-sub-name">{sub.emoji} {sub.label}</span>
+                  {/* A bar rather than a second colour: this is magnitude
+                      within one head, so it stays in that head's own hue. */}
+                  <span className="report-bar" aria-hidden="true">
+                    <span
+                      className="report-bar-fill"
+                      style={{ width: `${Math.max(2, sub.share * 100)}%`, background: category.color }}
+                    />
+                  </span>
+                  <span className="report-sub-value">
+                    {symbol}{sub.total.toLocaleString()}
+                    <span className="report-sub-count"> · {sub.count}</span>
                   </span>
                 </button>
-                {editingId === expense.id && (
-                  <div className="report-picker">
-                    {TAXONOMY.map((category) => (
-                      <div key={category.key} className="report-picker-group">
-                        <div className="report-picker-head">{category.emoji} {category.label}</div>
-                        <div className="report-picker-subs">
-                          {category.subs.map((sub) => (
-                            <button
-                              key={sub.key}
-                              type="button"
-                              className="report-picker-chip"
-                              onClick={() => handleRecategorise(expense, category.label, sub.label)}
-                            >
-                              {sub.emoji} {sub.label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
+              )
+            })}
+          </div>
+        ))}
+
+        {!selectedSub && (
+          <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 10 }}>
+            Tap a subcategory to see the expenses inside it.
+          </p>
+        )}
       </div>
+
+      {/* What's inside the subcategory that was tapped. This is the space the
+          old "Fix a category" list occupied; the correction it offered now
+          lives on every row here and on the cards themselves. */}
+      {selectedSub && openSub && (
+        <div className="card">
+          <div className="card-heading">
+            {openSub.emoji} {openSub.label}
+            <span className="report-group-total">
+              {symbol}{openSub.total.toLocaleString()}
+            </span>
+          </div>
+          <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 10 }}>
+            {openExpenses.length} expense{openExpenses.length === 1 ? '' : 's'} in {openCategory.label} · tap one to move it somewhere else.
+          </p>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {openExpenses.map((expense) => (
+              <button
+                key={expense.id}
+                type="button"
+                className="report-fix-row"
+                onClick={() => setEditing(expense)}
+              >
+                <span className="report-fix-name">{expense.description}</span>
+                <span className="report-fix-tag">
+                  {symbol}{Number(expense.amount).toLocaleString()}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            className="btn-ghost"
+            style={{ fontSize: 13, padding: '8px 0 0', color: 'var(--color-text-muted)' }}
+            onClick={() => setSelectedSub(null)}
+          >
+            Close
+          </button>
+        </div>
+      )}
+
+      {editing && (
+        <CategoryPicker expense={editing} onClose={() => setEditing(null)} />
+      )}
     </div>
   )
 }
