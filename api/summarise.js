@@ -18,11 +18,24 @@
 //   * It runs only when somebody presses the button. Nothing here is on the
 //     path of opening a trip.
 //
-// This is the slowest call in the app by a distance — five hundred words of
-// generation against a whole trip's facts, measured at well over ten seconds.
-// vercel.json therefore gives THIS function (and no other) a 60s maxDuration;
-// without it the platform default cuts the request off mid-sentence and the
-// button looks broken.
+// This is the slowest call in the app by a distance, and the first version
+// shipped here timed out in production. The cause is worth writing down:
+// gemini-3-flash-preview REASONS BY DEFAULT, and on a prose task it spent
+// 10,884 thinking tokens to produce a 283-token paragraph — 34 seconds for a
+// toy prompt, past 60 for a real trip. `thinkingLevel: 'low'` brings the same
+// request back to about five seconds. There is nothing here worth thinking
+// hard about: every fact is handed over precomputed and the job is to write
+// them down nicely.
+//
+// Two consequences to keep in mind if this is ever edited:
+//   * maxOutputTokens counts THINKING as well as the answer. A budget of
+//     1200 produced a 44-token stub, because the thoughts ate the rest.
+//   * A response cut off by that ceiling still arrives as a valid 200 with
+//     finishReason MAX_TOKENS, so it is checked for explicitly below. Half a
+//     sentence is worse than falling through to the next model.
+//
+// vercel.json also gives THIS function (and no other) a 60s maxDuration, as
+// headroom rather than as the fix.
 //
 // Model preferences follow the same reality found in ClaimGuard (2026-07-11):
 // "gemini-2.5-flash(-lite)" still appear in the live model list but 404 for
@@ -40,6 +53,22 @@ const MAX_ITEMS_PER_ENTRY = 12
 const MAX_CATEGORIES = 12
 const MIN_WORDS = 90
 const MAX_WORDS = 500
+
+// Comfortably over low-effort thinking (~1-2k) plus 500 words of prose
+// (~700). See the note above: this ceiling covers both.
+const MAX_OUTPUT_TOKENS = 4096
+
+/**
+ * Only the Gemini 3 line takes thinkingLevel; the 2.5-era fallbacks below it
+ * would reject the field and be skipped by the retry loop, which would quietly
+ * cost us the fallbacks we keep them for.
+ */
+function generationConfig(model) {
+  const base = { temperature: 0.6, maxOutputTokens: MAX_OUTPUT_TOKENS }
+  return model.startsWith('gemini-3')
+    ? { ...base, thinkingConfig: { thinkingLevel: 'low' } }
+    : base
+}
 
 const text = (value, limit) =>
   typeof value === 'string' ? value.trim().slice(0, limit) : ''
@@ -175,7 +204,7 @@ export default async function handler(req, res) {
             contents: [{ parts: [{ text: buildPrompt(facts, words) }] }],
             // Prose, so a little warmth is wanted here — unlike the labeller
             // and the bill reader, which both run at 0.
-            generationConfig: { temperature: 0.6 },
+            generationConfig: generationConfig(model),
           }),
         }
       )
@@ -188,13 +217,21 @@ export default async function handler(req, res) {
       }
 
       const data = await r.json()
-      const parts = data?.candidates?.[0]?.content?.parts
+      const candidate = data?.candidates?.[0]
+      const parts = candidate?.content?.parts
       const written = Array.isArray(parts)
         ? parts.map((p) => (typeof p?.text === 'string' ? p.text : '')).join('').trim()
         : ''
 
       if (!written) {
         lastError = `Model ${model} returned an empty reply`
+        continue
+      }
+
+      // A truncated paragraph arrives as a perfectly valid 200. Passing half a
+      // sentence off as the trip's summary is worse than trying another model.
+      if (candidate.finishReason && candidate.finishReason !== 'STOP') {
+        lastError = `Model ${model} stopped early (${candidate.finishReason})`
         continue
       }
 
