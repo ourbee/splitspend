@@ -114,7 +114,7 @@ function renderFacts(facts) {
   const symbol = facts.currency
 
   if (facts.dateRange) lines.push(`Dates: ${facts.dateRange}`)
-  if (facts.people) lines.push(`Group size: ${facts.people}`)
+  if (facts.people) lines.push(facts.people === 1 ? 'Travelling alone' : `Group size: ${facts.people}`)
   if (facts.total != null) lines.push(`Total spent: ${symbol}${facts.total.toLocaleString('en-IN')}`)
 
   if (facts.categories.length) {
@@ -142,12 +142,17 @@ function renderFacts(facts) {
 
 function buildPrompt(facts, words) {
   const symbol = facts.currency || ''
-  return `You are writing the opening passage of a group's trip diary, from their own expense records.
+  // A one-person Splitspend is a diary, not a group's ledger. The passage has
+  // to be written in the first person singular — "we" for somebody who went
+  // alone reads as an invented companion, which is exactly the kind of thing
+  // this prompt spends the rest of its rules forbidding.
+  const solo = facts.people === 1
+  return `You are writing the opening passage of ${solo ? "somebody's own" : "a group's"} trip diary, from their own expense records.
 
 Write ONE flowing passage of about ${words} words in plain, everyday English — the way someone would tell a friend what the trip was like over coffee. Contractions are fine. No headings, no bullet points, no markdown, no title.
 
 Hard rules:
-- Never name a person. The group is "we" and "us"${facts.people ? ` — there were ${facts.people} of us` : ''}. Places, dishes and landmarks keep their names.
+- Never name a person. ${solo ? 'This trip was taken alone: write as "I", "me" and "my", and never invent a companion or use "we".' : `The group is "we" and "us"${facts.people ? ` — there were ${facts.people} of us` : ''}.`} Places, dishes and landmarks keep their names.
 - Every number you write must be copied exactly from the facts below. Never add, total, average, estimate or convert anything. If a figure is not listed, do not state one.
 - Lines marked [moment] have no cost at all. Never attach a price to one — not even zero, not even "free".
 - Most sentences should carry no figure at all. Pick out a handful worth mentioning and let the rest of the trip be described in words. A price is worth a mention when it was big, surprising, or the point of the day.

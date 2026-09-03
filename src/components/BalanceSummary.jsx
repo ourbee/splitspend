@@ -27,9 +27,17 @@ export default function BalanceSummary() {
   if (expenses.length === 0) {
     return (
       <div className="empty-state">
-        <p>No expenses to calculate balances</p>
+        <p>{participants.length < 2 ? 'No expenses recorded yet' : 'No expenses to calculate balances'}</p>
       </div>
     )
+  }
+
+  // A solo Splitspend has no balance to strike: whoever paid also owes it,
+  // every net is zero and every settlement list is empty. Rather than print a
+  // page of zeroes, the tab becomes what the numbers actually are for one
+  // person — the total, and the shape of it.
+  if (participants.length < 2) {
+    return <SoloTotals expenses={expenses} symbol={symbol} />
   }
 
   // Balances include recorded settlements, so this tab always agrees
@@ -149,6 +157,79 @@ export default function BalanceSummary() {
           the tab now reads as one story: the total, then each person, then who
           pays whom. */}
       <SettlementList />
+    </div>
+  )
+}
+
+/**
+ * The Balances tab for a one-person Splitspend. No payer, no share, no net —
+ * just what was spent, over how many days, and the day that cost the most.
+ */
+function SoloTotals({ expenses, symbol }) {
+  const total = expenses.reduce((sum, e) => sum + Number(e.amount), 0)
+
+  const byDay = new Map()
+  for (const e of expenses) {
+    const key = dayKey(e)
+    byDay.set(key, (byDay.get(key) || 0) + Number(e.amount))
+  }
+  const days = byDay.size
+  const perDay = days ? total / days : 0
+
+  let dearestDay = null
+  for (const [key, amount] of byDay) {
+    if (!dearestDay || amount > dearestDay.amount) dearestDay = { key, amount }
+  }
+
+  const biggest = expenses.reduce(
+    (max, e) => (!max || Number(e.amount) > Number(max.amount) ? e : max),
+    null
+  )
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div className="card" style={{ textAlign: 'center', padding: 20 }}>
+        <div style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 4 }}>Total Spend</div>
+        <div style={{ fontSize: 28, fontWeight: 700 }}>{symbol}{total.toLocaleString()}</div>
+      </div>
+
+      <div className="card">
+        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: 'var(--color-text-muted)' }}>
+          The Shape Of It
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div className="person-expense-row">
+            <span>Days with spending</span>
+            <span style={{ fontWeight: 600 }}>{days}</span>
+          </div>
+          <div className="person-expense-row">
+            <span>Average a day</span>
+            <span style={{ fontWeight: 600 }}>{symbol}{money(perDay)}</span>
+          </div>
+          {dearestDay && (
+            <div className="person-expense-row">
+              <span>Dearest day · {formatDay(dearestDay.key)}</span>
+              <span style={{ fontWeight: 600 }}>{symbol}{money(dearestDay.amount)}</span>
+            </div>
+          )}
+          {biggest && (
+            <div className="person-expense-row">
+              <span style={{ minWidth: 0 }}>
+                <span aria-hidden="true">{categoryEmoji(biggest.description)}</span>{' '}
+                Biggest single spend · {biggest.description}
+              </span>
+              <span style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
+                {symbol}{money(biggest.amount)}
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <p style={{ fontSize: 13, color: 'var(--color-text-muted)', textAlign: 'center', padding: '0 12px' }}>
+        Nothing to settle — this Splitspend is just you. Add someone from the
+        &#8942; menu and balances will appear here.
+      </p>
     </div>
   )
 }

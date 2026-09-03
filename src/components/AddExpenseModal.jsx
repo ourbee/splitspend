@@ -45,6 +45,13 @@ export default function AddExpenseModal({ onClose, expense }) {
     ? [me, ...participants.filter((p) => p.id !== me.id)]
     : participants
 
+  // A one-person Splitspend has nothing to decide about paying or splitting:
+  // one chip, one option, one answer. The whole block is hidden rather than
+  // shown with a single choice in it — the expense is still stored with a
+  // full-amount split against that person, exactly as before, so adding a
+  // second participant later brings the controls back with nothing to repair.
+  const solo = participants.length < 2
+
   // Expense or diary event. The one + button covers both; the type is fixed
   // once a card exists, so the toggle only shows while adding.
   const [mode, setMode] = useState(expense?._type === 'event' ? 'event' : 'expense')
@@ -446,7 +453,7 @@ export default function AddExpenseModal({ onClose, expense }) {
             </div>
           </div>
 
-          {!isEvent && (
+          {!isEvent && !solo && (
             <div>
               <label className="label">Paid by</label>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
@@ -475,7 +482,7 @@ export default function AddExpenseModal({ onClose, expense }) {
             </div>
           )}
 
-          {!isEvent && (
+          {!isEvent && !solo && (
             <div>
               <label className="label">Split among</label>
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, cursor: 'pointer' }}>
@@ -516,7 +523,7 @@ export default function AddExpenseModal({ onClose, expense }) {
             </div>
           )}
 
-          {!isEvent && (
+          {!isEvent && !solo && (
             <div>
               <label className="label">How to split</label>
               <div className="tabs" style={{ marginBottom: 10 }}>

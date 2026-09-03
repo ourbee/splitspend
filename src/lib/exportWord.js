@@ -71,6 +71,8 @@ export function buildDiaryDoc(
   const getP = (id) => participants.find((p) => p.id === id)
   const name = (id) => getP(id)?.name || 'Unknown'
   const compact = density === 'compact'
+  // Same rule as the print diary: one person, no statement. See exportDiary.js.
+  const solo = participants.length < 2
   const bodySize = compact ? '9.5pt' : '11pt'
   const metaSize = compact ? '8pt' : '9pt'
 
@@ -192,7 +194,7 @@ export function buildDiaryDoc(
         <tr>
           <td width="70%" style="padding:3pt 0">
             <b>${esc(icon)} ${esc(item.description)}</b><br>
-            <span style="font-size:${metaSize};color:#64748b">Paid by ${esc(name(item.paid_by))} · Split: ${shares}</span>
+            ${solo ? '' : `<span style="font-size:${metaSize};color:#64748b">Paid by ${esc(name(item.paid_by))} · Split: ${shares}</span>`}
             ${item.note ? `<br><span style="font-size:${metaSize};color:#475569">${esc(item.note)}</span>` : ''}
             ${bill}
           </td>
@@ -305,6 +307,7 @@ export function buildDiaryDoc(
   <h2>Statement</h2>
   <p align="right"><b>Trip total: ${money(symbol, grandTotal)}</b></p>
 
+  ${solo ? '' : `
   <h3>Who paid, who consumed</h3>
   <table width="100%" cellspacing="0" cellpadding="4" border="0">
     <tr><td><b>Person</b></td><td align="right"><b>Paid</b></td><td align="right"><b>Their share</b></td></tr>
@@ -317,7 +320,7 @@ export function buildDiaryDoc(
   <h3>Settlements still needed</h3>
   <table width="100%" cellspacing="0" cellpadding="4" border="0">${settlementRows}</table>
 
-  ${historyBlock}
+  ${historyBlock}`}
 
   <div style="mso-element:footer" id="f1">
     <p class="MsoFooter">${esc(FOOTER_TEXT)}</p>

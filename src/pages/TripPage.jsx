@@ -104,6 +104,9 @@ export default function TripPage() {
 
   const showQR = showQRManual || (showQRAuto && !!myIdentity)
 
+  // "Balances" is the wrong word when there is nobody to balance against.
+  const solo = participants.length < 2
+
   const handleCloseQR = () => {
     setShowQRAuto(false)
     setShowQRManual(false)
@@ -231,7 +234,7 @@ export default function TripPage() {
           className={`tab ${activeTab === 'balances' ? 'active' : ''}`}
           onClick={() => setActiveTab('balances')}
         >
-          Balances
+          {solo ? 'Totals' : 'Balances'}
         </button>
         <button
           className={`tab ${activeTab === 'reports' ? 'active' : ''}`}

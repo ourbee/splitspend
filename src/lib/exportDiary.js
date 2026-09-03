@@ -65,6 +65,10 @@ export function buildDiaryHtml(
   const getP = (id) => participants.find((p) => p.id === id)
   const name = (id) => getP(id)?.name || 'Unknown'
   const compact = density === 'compact'
+  // A one-person diary has no statement to print: nobody paid anybody, every
+  // net is zero and every settlement table would be a row of dashes. The
+  // trip total stays — that is the one figure a solo record is for.
+  const solo = participants.length < 2
 
   const items = sortExpenses([...expenses, ...events])
   // The list arrives newest-first, which is how the app reads. A diary reads
@@ -122,7 +126,7 @@ export function buildDiaryHtml(
             <div class="entry-title">${esc(item.description)}
               <span class="entry-amount">${money(symbol, item.amount)}</span>
             </div>
-            <div class="entry-meta">Paid by ${esc(name(item.paid_by))} · Split: ${shares}</div>
+            ${solo ? '' : `<div class="entry-meta">Paid by ${esc(name(item.paid_by))} · Split: ${shares}</div>`}
             ${item.note ? `<div class="entry-note">${esc(item.note)}</div>` : ''}
             ${bill}
           </div>
@@ -385,6 +389,7 @@ export function buildDiaryHtml(
   <div class="statement">
     <h2>Statement</h2>
     <div class="grand">Trip total: ${money(symbol, grandTotal)}</div>
+    ${solo ? '' : `
     <h3>Who paid, who consumed</h3>
     <table>
       <tr><th>Person</th><th class="num">Paid</th><th class="num">Their share</th></tr>
@@ -394,7 +399,7 @@ export function buildDiaryHtml(
     <table>${balanceRows}</table>
     <h3>Settlements still needed</h3>
     <table>${settlementRows}</table>
-    ${historyBlock}
+    ${historyBlock}`}
   </div>
 
   <div class="credit">${FOOTER_HTML}</div>

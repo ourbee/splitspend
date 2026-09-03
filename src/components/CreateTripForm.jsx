@@ -52,11 +52,15 @@ export default function CreateTripForm({ onSubmit, loading }) {
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    if (!tripName.trim() || participants.length < 2) return
+    if (!tripName.trim() || participants.length < 1) return
     onSubmit(tripName.trim(), currency, participants, creatorIndex)
   }
 
-  const canSubmit = tripName.trim() && participants.length >= 2 && !loading
+  // One person is a valid Splitspend. Somebody keeping their own record of a
+  // trip has nothing to split, and the app is a diary as much as a ledger —
+  // so the only real requirement is that somebody is in it. Others can be
+  // added later from the trip menu.
+  const canSubmit = tripName.trim() && participants.length >= 1 && !loading
 
   return (
     <form onSubmit={handleSubmit} className="card" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -214,9 +218,16 @@ export default function CreateTripForm({ onSubmit, loading }) {
           </div>
         )}
 
-        {participants.length < 2 && participants.length > 0 && (
+        {participants.length === 0 && (
           <p style={{ fontSize: 13, color: 'var(--color-text-muted)', marginTop: 8 }}>
-            Add at least 2 participants
+            Add at least one name — that can be just you.
+          </p>
+        )}
+
+        {participants.length === 1 && (
+          <p style={{ fontSize: 13, color: 'var(--color-text-muted)', marginTop: 8 }}>
+            Just you for now — nothing to split, and that's fine. You can add
+            others later.
           </p>
         )}
 

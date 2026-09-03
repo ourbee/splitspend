@@ -27,6 +27,9 @@ export default function ExpenseCard({ expense, onDelete, onEdit, showDate = true
   const color = paletteEntry(resolveColorSlots(participants)[expense.paid_by])
   const adder = expense.created_by ? getParticipant(expense.created_by) : null
   const unequal = isUnequalSplit(expense.splits)
+  // On a solo Splitspend "Paid by me · Split: me" is on every single card and
+  // says nothing. The date keeps its place; the attribution goes.
+  const solo = participants.length < 2
   // A hand-picked emoji wins; otherwise the description is re-read every time,
   // so editing the text updates the icon.
   const icon = expense.emoji || categoryEmoji(expense.description)
@@ -74,12 +77,22 @@ export default function ExpenseCard({ expense, onDelete, onEdit, showDate = true
           <span style={{ marginRight: 6 }} aria-hidden="true">{icon}</span>
           {expense.description}
         </div>
-        <div style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
-          Paid by {payer?.emoji || ''} {payer?.name || 'Unknown'}{dateLabel ? ` · ${dateLabel}` : ''}
-        </div>
-        <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 2 }}>
-          Split: {splitLabel}
-        </div>
+        {solo ? (
+          dateLabel && (
+            <div style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
+              {dateLabel}
+            </div>
+          )
+        ) : (
+          <>
+            <div style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
+              Paid by {payer?.emoji || ''} {payer?.name || 'Unknown'}{dateLabel ? ` · ${dateLabel}` : ''}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 2 }}>
+              Split: {splitLabel}
+            </div>
+          </>
+        )}
         {expense.note && (
           <div className="expense-note">{expense.note}</div>
         )}
