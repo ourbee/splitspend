@@ -16,17 +16,21 @@ import { toModelImage } from './imageDownscale'
  * Resolves to { merchant, amount, date, summary, text, items } — every field
  * may be null or empty; the caller treats the result as an editable draft,
  * never as authority. `items` is the per-row breakdown; it is stored as a
- * record beside the expense and never feeds the split maths.
+ * record beside the expense and never feeds the split maths. `travel` carries
+ * a ticket's particulars — seat, coach, class, PNR, gate, platform, times —
+ * and is null for an ordinary purchase.
  */
 export async function scanReceipt(file) {
-  // { data, mimeType }: a downscaled JPEG normally, or the untouched photo
-  // when the browser could not decode it but the model can (HEIC).
+  // { blob, mimeType }: a downscaled WebP or JPEG normally, or the untouched
+  // photo when the browser could not decode it but the model can (HEIC). The
+  // bytes go up as they are — base64 in JSON cost a third more on the wire and
+  // made the phone build a multi-megabyte string before sending anything.
   const image = await toModelImage(file)
 
   const res = await fetch('/api/scan-receipt', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ image: image.data, mimeType: image.mimeType }),
+    headers: { 'Content-Type': image.mimeType },
+    body: image.blob,
   })
 
   let body = null
@@ -47,5 +51,6 @@ export async function scanReceipt(file) {
     summary: body.summary || null,
     text: body.text || null,
     items: normaliseLineItems(body.items) || [],
+    travel: body.travel || null,
   }
 }

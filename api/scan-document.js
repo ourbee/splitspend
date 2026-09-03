@@ -16,25 +16,55 @@
 // "gemini-2.5-flash(-lite)" still appear in the live model list but 404 for
 // new keys, and "gemini-flash-latest" is a slow thinker prone to malformed
 // JSON — so it stays last. Override without a deploy by setting GEMINI_MODEL.
+import { readImage } from './_imageBody.js'
+import { cleanTravel } from './_travel.js'
+
 const MODEL_PREFERENCES = [
   'gemini-3-flash-preview',
   'gemini-flash-lite-latest',
   'gemini-flash-latest',
 ]
 
+/**
+ * Only the Gemini 3 line takes thinkingLevel; the 2.5-era fallbacks below it
+ * would reject the field and be skipped by the retry loop. Reading a boarding
+ * pass is transcription, not deliberation. See scan-receipt.js.
+ */
+function generationConfig(model) {
+  const base = { response_mime_type: 'application/json', temperature: 0 }
+  return model.startsWith('gemini-3')
+    ? { ...base, thinkingConfig: { thinkingLevel: 'low' } }
+    : base
+}
+
 const PROMPT = `This photo is a travel document — a boarding pass, train or bus ticket, hotel or tour booking, entry pass, permit, itinerary, or a sign at a place. Extract what it says and reply with ONLY a JSON object, no markdown fences, in this exact shape:
 {
   "kind": string or null,     // what the document is, e.g. "boarding pass", "train ticket", "hotel booking", "museum entry", "sign"
   "title": string or null,    // a short diary heading, under 60 characters, e.g. "Flight to Hyderabad (6E 763)" or "Checked in at Hotel Sitara"
   "date": string or null,     // the date the document is FOR, as YYYY-MM-DD, if visible
-  "details": string or null   // the significant particulars, 1-4 short lines separated by newlines
+  "details": string or null,  // anything notable that the fields below do not already carry — 1-4 short lines separated by newlines
+  "travel": {                 // ticket particulars; null when the document is not a ticket or booking
+    "operator": string or null,      // airline, railway or bus company, e.g. "IndiGo", "IRCTC", "VRL Travels"
+    "service": string or null,       // flight/train/bus number and name, e.g. "6E 763", "12841 Coromandel Express"
+    "from": string or null,          // origin as printed, station/airport/stop
+    "to": string or null,            // destination as printed
+    "pnr": string or null,           // PNR, booking reference or ticket number
+    "seat": string or null,          // seat or berth, e.g. "14A", "32 LB"
+    "coach": string or null,         // coach or bogie, trains and some buses only, e.g. "B4", "S7"
+    "seat_class": string or null,    // class of travel, e.g. "3A", "Sleeper", "Economy", "AC Seater"
+    "boarding_time": string or null, // boarding time as printed, e.g. "21:35"
+    "departure_time": string or null,// departure time as printed
+    "gate": string or null,          // gate, flights only
+    "platform": string or null       // platform, trains only
+  }
 }
 Rules:
 - Copy printed values exactly. Never guess, correct or invent anything that is not legible — use null instead.
-- "details" is for what a person would want to remember later: route, times, seat or coach, gate, terminal, platform, hotel name, room, confirmation or PNR reference, operator, place name.
-- Do NOT include any price, fare, total, or payment amount. Do not include card numbers, CVV, passport numbers, or government ID numbers, even if they are printed.
+- The ticket particulars go in "travel", one bare value per field — "B4", not "Coach B4" — and never a value that is not legible. Leave "travel" null only when the document involves no journey or booking at all.
+- "details" is then for what "travel" has no field for: terminal, hotel name, room, tour or guide, place name, anything printed that a person would want to remember. Do not repeat there what the travel fields already hold.
+- Do NOT include any price, fare, total, or payment amount anywhere. Do not include card numbers, CVV, passport numbers, or government ID numbers, even if they are printed. A PNR or booking reference is wanted; those are not.
 - Write plainly, not as a form dump. "Kolkata to Chennai, 6E 763, dep 06:40, seat 14A" beats a list of labels.
-- If the photo is not a document or a sign at all, use null for every field.`
+- If the photo is not a document or a sign at all, use null for every field and null for travel.`
 
 const clean = (value, limit) =>
   typeof value === 'string' && value.trim() ? value.trim().slice(0, limit) : null
@@ -51,24 +81,14 @@ export default async function handler(req, res) {
     return
   }
 
-  const image = req.body?.image
-  if (typeof image !== 'string' || image.length < 100) {
-    res.status(400).json({ ok: false, error: 'No image received' })
+  // Raw bytes with the format in Content-Type, or the older base64-in-JSON
+  // shape that a bundle still cached on a phone will keep sending.
+  const body = await readImage(req)
+  if (body.error) {
+    res.status(body.status).json({ ok: false, error: body.error })
     return
   }
-  // The client downscales to ~1280px JPEG; anything hugely bigger is not ours.
-  // The exception is a photo the browser could not decode (a HEIC one, say),
-  // which is forwarded untouched — still under this ceiling, which is set by
-  // the platform's 4.5MB request body limit rather than by us.
-  if (image.length > 4_000_000) {
-    res.status(413).json({ ok: false, error: 'Image too large' })
-    return
-  }
-
-  // Whatever the client managed to prepare. Restricted to the formats the
-  // model documents as inline data, so a bad value cannot be relayed onward.
-  const MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']
-  const mimeType = MIME_TYPES.includes(req.body?.mimeType) ? req.body.mimeType : 'image/jpeg'
+  const { data: image, mimeType } = body
 
   const models = process.env.GEMINI_MODEL
     ? [process.env.GEMINI_MODEL]
@@ -89,10 +109,7 @@ export default async function handler(req, res) {
                 { inline_data: { mime_type: mimeType, data: image } },
               ],
             }],
-            generationConfig: {
-              response_mime_type: 'application/json',
-              temperature: 0,
-            },
+            generationConfig: generationConfig(model),
           }),
         }
       )
@@ -128,6 +145,7 @@ export default async function handler(req, res) {
         title: clean(parsed.title, 90),
         date: date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null,
         details: clean(parsed.details, 600),
+        travel: cleanTravel(parsed.travel),
       })
       return
     } catch (err) {

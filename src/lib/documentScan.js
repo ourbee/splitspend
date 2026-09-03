@@ -16,17 +16,20 @@ import { toModelImage } from './imageDownscale'
 
 /**
  * OCR a photographed travel document.
- * Resolves to { kind, title, date, details } — every field may be null.
+ * Resolves to { kind, title, date, details, travel } — every field may be
+ * null. `travel` is the same ticket block the bill scanner returns.
  */
 export async function scanDocument(file) {
-  // { data, mimeType }: a downscaled JPEG normally, or the untouched photo
-  // when the browser could not decode it but the model can (HEIC).
+  // { blob, mimeType }: a downscaled WebP or JPEG normally, or the untouched
+  // photo when the browser could not decode it but the model can (HEIC). The
+  // bytes go up as they are — base64 in JSON cost a third more on the wire and
+  // made the phone build a multi-megabyte string before sending anything.
   const image = await toModelImage(file)
 
   const res = await fetch('/api/scan-document', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ image: image.data, mimeType: image.mimeType }),
+    headers: { 'Content-Type': image.mimeType },
+    body: image.blob,
   })
 
   let body = null
@@ -45,5 +48,6 @@ export async function scanDocument(file) {
     title: body.title || null,
     date: body.date || null,
     details: body.details || null,
+    travel: body.travel || null,
   }
 }

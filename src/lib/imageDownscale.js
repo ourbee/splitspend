@@ -21,7 +21,37 @@
 // a format the model knows is forwarded as it came.
 
 const MAX_DIMENSION = 1280
-const JPEG_QUALITY = 0.8
+const QUALITY = 0.8
+
+// WebP where the browser can encode it: on a photographed bill it comes out
+// roughly a third smaller than JPEG at the same quality, which is a third less
+// to upload before anybody sees a result. Gemini reads it either way. Safari
+// only learned canvas WebP in 14, hence the check rather than the assumption.
+let webpSupported = null
+function canEncodeWebp() {
+  if (webpSupported === null) {
+    try {
+      const probe = document.createElement('canvas')
+      probe.width = 1
+      probe.height = 1
+      webpSupported = probe.toDataURL('image/webp').startsWith('data:image/webp')
+    } catch {
+      webpSupported = false
+    }
+  }
+  return webpSupported
+}
+
+/** canvas.toBlob, promised. Unlike toDataURL it never builds a base64 string. */
+function encode(canvas, mimeType) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => (blob ? resolve(blob) : reject(new Error('That photo could not be re-encoded'))),
+      mimeType,
+      QUALITY
+    )
+  })
+}
 
 // The formats worth forwarding undecoded. Gemini reads more than this, but
 // these two are the only ones with a real browser gap: no Chrome decodes
@@ -30,11 +60,10 @@ const JPEG_QUALITY = 0.8
 // saying so at once beats a three-megabyte round trip to find out.
 const MODEL_READABLE = new Set(['image/heic', 'image/heif'])
 
-// Vercel caps a serverless request body at 4.5 MB and base64 costs a third on
-// top of the bytes, so ~4,000,000 characters (about 3 MB of photo) is as much
-// as can be forwarded whole with room left for the JSON around it. A
-// downscaled JPEG never comes close; an untouched HEIC can.
-const MAX_BASE64 = 4_000_000
+// Vercel caps a serverless request body at 4.5 MB. Raw bytes go up now, so
+// this is the photo's own size rather than a base64 figure a third larger.
+// A downscaled photo never comes close; an untouched HEIC can.
+const MAX_BYTES = 3_500_000
 
 /** Magic bytes, because a phone gallery will hand over a file with no type. */
 async function sniffType(file) {
@@ -120,9 +149,9 @@ async function decode(file) {
 
 /**
  * Prepare a photo for a vision model.
- * Resolves to { data, mimeType } where data is base64 with no prefix:
- * a downscaled JPEG when the browser could decode the photo, otherwise the
- * original bytes when the model can read them itself.
+ * Resolves to { blob, mimeType }: a downscaled WebP or JPEG when the browser
+ * could decode the photo, otherwise the original file when the model can read
+ * it and the browser cannot.
  */
 export async function toModelImage(file) {
   if (!file || file.size === 0) {
@@ -143,8 +172,12 @@ export async function toModelImage(file) {
       canvas.height = Math.max(1, Math.round(height * scale))
       canvas.getContext('2d').drawImage(source, 0, 0, canvas.width, canvas.height)
 
-      const dataUrl = canvas.toDataURL('image/jpeg', JPEG_QUALITY)
-      return { data: dataUrl.slice(dataUrl.indexOf(',') + 1), mimeType: 'image/jpeg' }
+      const mimeType = canEncodeWebp() ? 'image/webp' : 'image/jpeg'
+      const blob = await encode(canvas, mimeType)
+      // toBlob falls back to PNG when it does not recognise the type, which
+      // would be several times larger than the photo we started with.
+      if (blob.type === mimeType) return { blob, mimeType }
+      return { blob: await encode(canvas, 'image/jpeg'), mimeType: 'image/jpeg' }
     } finally {
       // An ImageBitmap holds its pixels until it is closed, which matters on
       // a phone that has just decoded a 50-megapixel photo.
@@ -166,12 +199,10 @@ export async function toModelImage(file) {
     )
   }
 
-  const dataUrl = await readAsDataUrl(file)
-  const data = dataUrl.slice(dataUrl.indexOf(',') + 1)
-  if (data.length > MAX_BASE64) {
+  if (file.size > MAX_BYTES) {
     throw new Error(
       'That photo is too large to send in a format we cannot shrink on the phone. Take it with the camera button instead, or save a smaller copy.'
     )
   }
-  return { data, mimeType }
+  return { blob: file, mimeType }
 }

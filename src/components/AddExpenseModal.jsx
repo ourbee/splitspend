@@ -13,6 +13,7 @@ import { EXPENSE_EMOJI_GROUPS, EVENT_EMOJI_GROUPS } from '../lib/expenseEmojis'
 import { scanReceipt } from '../lib/receiptScan'
 import { scanDocument } from '../lib/documentScan'
 import { normaliseLineItems } from '../lib/lineItems'
+import { formatTravel, appendToNote } from '../lib/travelDetails'
 import { guessLabelStrings } from '../lib/categories'
 import EmojiPicker from './EmojiPicker'
 import LineItemsTable from './LineItemsTable'
@@ -177,8 +178,12 @@ export default function AddExpenseModal({ onClose, expense }) {
     if (isEvent) {
       try {
         const doc = await scanDocument(file)
-        if (doc.details) {
-          setNote((prev) => (prev.trim() ? `${prev.trim()}\n${doc.details}` : doc.details))
+        // A ticket's particulars — seat, coach, class, PNR, gate, platform —
+        // read the same here as they do on the expense side, because both
+        // scanners return the same block and both format it the same way.
+        const travelText = formatTravel(doc.travel)
+        if (doc.details || travelText) {
+          setNote((prev) => appendToNote(prev, doc.details, travelText))
         }
         if (doc.title && !description.trim()) {
           // Left on "Automatic": a title like "Flight to Hyderabad" now picks
@@ -188,7 +193,7 @@ export default function AddExpenseModal({ onClose, expense }) {
         // Only when the date is still the untouched default — a scan should
         // never quietly move an event somebody has already placed on a day.
         if (doc.date && expenseDate === todayStr()) setExpenseDate(doc.date)
-        if (!doc.title && !doc.details && !doc.date) {
+        if (!doc.title && !doc.details && !doc.date && !travelText) {
           setScanError('Could not read anything useful from that photo.')
         }
       } catch (err) {
@@ -200,16 +205,17 @@ export default function AddExpenseModal({ onClose, expense }) {
 
     try {
       const result = await scanReceipt(file)
-      if (result.summary || result.text) {
-        const scanned = result.summary || result.text
-        setNote((prev) => (prev.trim() ? `${prev.trim()}\n${scanned}` : scanned))
+      const travelText = formatTravel(result.travel)
+      const scanned = result.summary || result.text
+      if (scanned || travelText) {
+        setNote((prev) => appendToNote(prev, scanned, travelText))
       }
       if (result.amount > 0 && !amount) setAmount(String(result.amount))
       if (result.merchant && !description.trim()) setDescription(result.merchant)
       // A second scan replaces the rows rather than appending: two photos of
       // the same bill would otherwise silently double the table.
       if (result.items.length) setLineItems(result.items)
-      if (!result.summary && !result.text && !result.items.length && !(result.amount > 0)) {
+      if (!scanned && !travelText && !result.items.length && !(result.amount > 0)) {
         setScanError('Could not read anything useful from that photo.')
       }
     } catch (err) {
