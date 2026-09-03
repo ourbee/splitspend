@@ -83,10 +83,18 @@ export default async function handler(req, res) {
     return
   }
   // The client downscales to ~1280px JPEG; anything hugely bigger is not ours.
+  // The exception is a photo the browser could not decode (a HEIC one, say),
+  // which is forwarded untouched — still under this ceiling, which is set by
+  // the platform's 4.5MB request body limit rather than by us.
   if (image.length > 4_000_000) {
     res.status(413).json({ ok: false, error: 'Image too large' })
     return
   }
+
+  // Whatever the client managed to prepare. Restricted to the formats the
+  // model documents as inline data, so a bad value cannot be relayed onward.
+  const MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']
+  const mimeType = MIME_TYPES.includes(req.body?.mimeType) ? req.body.mimeType : 'image/jpeg'
 
   const models = process.env.GEMINI_MODEL
     ? [process.env.GEMINI_MODEL]
@@ -104,7 +112,7 @@ export default async function handler(req, res) {
             contents: [{
               parts: [
                 { text: PROMPT },
-                { inline_data: { mime_type: 'image/jpeg', data: image } },
+                { inline_data: { mime_type: mimeType, data: image } },
               ],
             }],
             generationConfig: {

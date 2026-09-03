@@ -12,19 +12,21 @@
 // authority: an event has no amount and no split, so the worst a bad scan can
 // do is put a wrong sentence in a diary.
 
-import { toBase64Jpeg } from './imageDownscale'
+import { toModelImage } from './imageDownscale'
 
 /**
  * OCR a photographed travel document.
  * Resolves to { kind, title, date, details } — every field may be null.
  */
 export async function scanDocument(file) {
-  const image = await toBase64Jpeg(file)
+  // { data, mimeType }: a downscaled JPEG normally, or the untouched photo
+  // when the browser could not decode it but the model can (HEIC).
+  const image = await toModelImage(file)
 
   const res = await fetch('/api/scan-document', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ image }),
+    body: JSON.stringify({ image: image.data, mimeType: image.mimeType }),
   })
 
   let body = null

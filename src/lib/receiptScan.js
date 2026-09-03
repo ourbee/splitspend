@@ -4,7 +4,7 @@
  */
 
 import { normaliseLineItems } from './lineItems'
-import { toBase64Jpeg } from './imageDownscale'
+import { toModelImage } from './imageDownscale'
 
 // Bill scanning: the photo is downscaled in the browser, sent once to
 // /api/scan-receipt (which relays it to a vision model), and discarded.
@@ -19,12 +19,14 @@ import { toBase64Jpeg } from './imageDownscale'
  * record beside the expense and never feeds the split maths.
  */
 export async function scanReceipt(file) {
-  const image = await toBase64Jpeg(file)
+  // { data, mimeType }: a downscaled JPEG normally, or the untouched photo
+  // when the browser could not decode it but the model can (HEIC).
+  const image = await toModelImage(file)
 
   const res = await fetch('/api/scan-receipt', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ image }),
+    body: JSON.stringify({ image: image.data, mimeType: image.mimeType }),
   })
 
   let body = null
