@@ -30,3 +30,14 @@ export function forgetTrip(tripId) {
   delete all[tripId]
   localStorage.setItem(KEY, JSON.stringify(all))
 }
+
+// Union with another list (the Safari → Home Screen handoff); the newer
+// timestamp wins for a group both sides already know.
+export function mergeRecentTrips(trips) {
+  const all = load()
+  for (const t of trips) {
+    const mine = all[t.id]
+    if (!mine || (t.at || 0) > (mine.at || 0)) all[t.id] = { name: t.name, at: t.at || Date.now() }
+  }
+  localStorage.setItem(KEY, JSON.stringify(all))
+}

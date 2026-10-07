@@ -9,13 +9,19 @@ import useTripStore from '../store/tripStore'
 import { isSupabaseConfigured } from '../lib/supabase'
 import { getRecentTrips } from '../lib/recentTrips'
 import CreateTripForm from '../components/CreateTripForm'
+import { CopyForApp, PasteFromSafari } from '../components/HandoffPanel'
+import { isStandalone, isIOS } from '../lib/handoff'
 
 export default function HomePage() {
   const navigate = useNavigate()
   const createTrip = useTripStore((s) => s.createTrip)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-  const [recent] = useState(getRecentTrips)
+  const [recent, setRecent] = useState(getRecentTrips)
+  // iPhone walls the Home Screen app's storage off from Safari's, so each
+  // side offers its half of the handoff (see lib/handoff.js).
+  const [standalone] = useState(isStandalone)
+  const [ios] = useState(isIOS)
 
   const handleCreate = async (name, currency, participants, creatorIndex) => {
     setLoading(true)
@@ -104,6 +110,14 @@ export default function HomePage() {
           </div>
         </div>
       )}
+
+      {standalone && (
+        <PasteFromSafari
+          hasGroups={recent.length > 0}
+          onImported={() => setRecent(getRecentTrips())}
+        />
+      )}
+      {!standalone && ios && recent.length > 0 && <CopyForApp />}
     </div>
   )
 }

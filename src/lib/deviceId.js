@@ -13,3 +13,9 @@ export function getDeviceId() {
   }
   return id
 }
+
+// Used only by the Safari → Home Screen handoff, so both sides of an iPhone
+// present the same device to the server.
+export function setDeviceId(id) {
+  localStorage.setItem(STORAGE_KEY, id)
+}
