@@ -14,7 +14,7 @@
 // link carrying its recent list, its device id and its per-group identity
 // hints; the app pastes it and merges. No server change is involved.
 
-import { getDeviceId, setDeviceId } from './deviceId'
+import { getDeviceId, setDeviceId, linkDeviceId } from './deviceId'
 import { getRecentTrips, mergeRecentTrips } from './recentTrips'
 
 const ORIGIN = 'https://splitspend.vercel.app'
@@ -103,8 +103,12 @@ export function applyHandoff({ deviceId, trips }) {
   // the server then recognises "you" in every group straight away. If the app
   // already made or joined groups under its own id, swapping would orphan
   // those — so it keeps its id, and the identity hints below (plus the
-  // one-tap "Continue as …" on the join page) cover Safari's groups.
-  if (!hadOwnGroups && deviceId && UUID.test(deviceId)) setDeviceId(deviceId)
+  // one-tap "Continue as …" on the join page) cover Safari's groups — and
+  // Safari's id is linked, so groups joined there later still sync over.
+  if (deviceId && UUID.test(deviceId)) {
+    if (hadOwnGroups) linkDeviceId(deviceId)
+    else setDeviceId(deviceId)
+  }
 
   for (const t of trips) {
     if (t.identity && !localStorage.getItem(identityKey(t.id))) {

@@ -77,6 +77,15 @@ const useTripStore = create((set, get) => ({
         const saved = localStorage.getItem(identityKey(tripId))
         if (saved && participants.some((p) => p.id === saved)) {
           myIdentity = saved
+          // Known locally (handoff or server sync) but not to the server:
+          // register this device too, as "Continue as …" would. Best-effort.
+          supabase.rpc('claim_identity_v4', {
+            p_trip_id: tripId,
+            p_participant_id: saved,
+            p_device_id: getDeviceId(),
+            p_expect_unclaimed: false,
+            p_emoji: null,
+          }).then(() => {}, () => {})
         } else {
           localStorage.removeItem(identityKey(tripId))
         }

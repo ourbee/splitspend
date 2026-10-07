@@ -41,3 +41,23 @@ export function mergeRecentTrips(trips) {
   }
   localStorage.setItem(KEY, JSON.stringify(all))
 }
+
+// Fold in the server's list of groups this device has joined. Groups the
+// device opened recently keep their place; the server's name wins, since a
+// group can be renamed elsewhere. Returns true if the list changed.
+export function syncRecentTrips(rows) {
+  const all = load()
+  let changed = false
+  for (const r of rows) {
+    const mine = all[r.id]
+    if (!mine) {
+      all[r.id] = { name: r.name, at: r.at }
+      changed = true
+    } else if (r.name && mine.name !== r.name) {
+      mine.name = r.name
+      changed = true
+    }
+  }
+  if (changed) localStorage.setItem(KEY, JSON.stringify(all))
+  return changed
+}

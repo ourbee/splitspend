@@ -3,11 +3,12 @@
  * https://github.com/ourbee
  */
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import useTripStore from '../store/tripStore'
 import { isSupabaseConfigured } from '../lib/supabase'
 import { getRecentTrips } from '../lib/recentTrips'
+import { syncMyTrips } from '../lib/tripSync'
 import CreateTripForm from '../components/CreateTripForm'
 import { CopyForApp, PasteFromSafari } from '../components/HandoffPanel'
 import { isStandalone, isIOS } from '../lib/handoff'
@@ -22,6 +23,15 @@ export default function HomePage() {
   // side offers its half of the handoff (see lib/handoff.js).
   const [standalone] = useState(isStandalone)
   const [ios] = useState(isIOS)
+
+  // Groups this device joined anywhere — fills in what local storage lacks.
+  useEffect(() => {
+    let live = true
+    syncMyTrips().then((changed) => {
+      if (live && changed) setRecent(getRecentTrips())
+    })
+    return () => { live = false }
+  }, [])
 
   const handleCreate = async (name, currency, participants, creatorIndex) => {
     setLoading(true)

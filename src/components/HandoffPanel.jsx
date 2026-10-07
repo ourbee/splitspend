@@ -6,6 +6,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { buildHandoff, parsePasted, applyHandoff } from '../lib/handoff'
+import { syncMyTrips } from '../lib/tripSync'
 
 const muted = { fontSize: 13, color: 'var(--color-text-muted)', lineHeight: 1.5 }
 
@@ -72,11 +73,13 @@ export function PasteFromSafari({ hasGroups, onImported }) {
     }
     const added = applyHandoff(parsed)
     setMessage(added > 0
-      ? `Added ${added} Splitspend${added === 1 ? '' : 's'} from Safari.`
+      ? `Added ${added} Splitspend${added === 1 ? '' : 's'} from Safari. From now on, groups you join in either place show up in both.`
       : 'Already up to date — nothing new from Safari.')
     setManual(false)
     setText('')
     onImported()
+    // Safari's id may be newly linked: pull anything only the server knows.
+    syncMyTrips().then((changed) => changed && onImported())
   }
 
   const paste = async () => {
